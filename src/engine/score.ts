@@ -12,13 +12,15 @@ export interface EndingScore {
   total: number;
   ending: EndingKind;
   grades: MeterGrade[];
+  parts: { grades: number; docs: number; badges: number; bonus: number };
 }
 
 export function scoreGame(state: GameState): EndingScore {
   const ending = endingKind(state);
   const table = computeCapTable(state);
+  const runwayMonths = state.deal.closed && state.flags.runwayBeforeWire != null ? state.flags.runwayBeforeWire : state.runway;
   const grades = [
-    gradeRunway(state.runway, ending),
+    gradeRunway(runwayMonths, ending, state.deal.closed),
     gradeEquity(table.foundersPct),
     gradeHundred('Morale', state.morale, 'The human budget for another process.'),
     gradeHundred('Reputation', state.reputation, 'How the next lead will hear the story.'),
@@ -26,19 +28,21 @@ export function scoreGame(state: GameState): EndingScore {
   const docs = Math.min(state.docs.length, 36) * 4;
   const badges = state.achievements.length * 20;
   const endingBonus = ending === 'great' ? 120 : ending === 'okay' ? 70 : ending === 'bridge' ? 30 : 0;
-  const total = Math.max(0, Math.round(grades.reduce((sum, grade) => sum + letterValue(grade.letter), 0) + docs + badges + endingBonus));
-  return { total, ending, grades };
+  const gradePoints = grades.reduce((sum, grade) => sum + letterValue(grade.letter), 0);
+  const total = Math.max(0, Math.round(gradePoints + docs + badges + endingBonus));
+  return { total, ending, grades, parts: { grades: gradePoints, docs, badges, bonus: endingBonus } };
 }
 
-function gradeRunway(months: number, ending: EndingKind): MeterGrade {
+function gradeRunway(months: number, ending: EndingKind, closed: boolean): MeterGrade {
+  const when = closed ? 'before the wire' : 'on hand';
   if (ending === 'runway' || months <= 0) {
     return { meter: 'Runway', letter: 'F', detail: `${months.toFixed(1)} months. The clock won.` };
   }
-  if (months >= 24) return { meter: 'Runway', letter: 'A', detail: `${months.toFixed(1)} months after the money landed.` };
-  if (months >= 18) return { meter: 'Runway', letter: 'B', detail: `${months.toFixed(1)} months. Enough to work, not to drift.` };
-  if (months >= 10) return { meter: 'Runway', letter: 'C', detail: `${months.toFixed(1)} months. The next raise starts soon.` };
-  if (months >= 4) return { meter: 'Runway', letter: 'D', detail: `${months.toFixed(1)} months. Payroll is already on the calendar.` };
-  return { meter: 'Runway', letter: 'F', detail: `${months.toFixed(1)} months. This is a sprint you did not choose.` };
+  if (months >= 12) return { meter: 'Runway', letter: 'A', detail: `${months.toFixed(1)} months ${when}. You reached the close with room.` };
+  if (months >= 8) return { meter: 'Runway', letter: 'B', detail: `${months.toFixed(1)} months ${when}. Enough to work, not to drift.` };
+  if (months >= 5) return { meter: 'Runway', letter: 'C', detail: `${months.toFixed(1)} months ${when}. The next raise starts soon.` };
+  if (months >= 2) return { meter: 'Runway', letter: 'D', detail: `${months.toFixed(1)} months ${when}. Payroll is already on the calendar.` };
+  return { meter: 'Runway', letter: 'F', detail: `${months.toFixed(1)} months ${when}. This is a sprint you did not choose.` };
 }
 
 function gradeEquity(founders: number): MeterGrade {

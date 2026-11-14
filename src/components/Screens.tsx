@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ACHIEVEMENTS } from '../engine/achievements';
-import { endingKind, greatBlockers } from '../engine/flow';
+import { blockerBlurb, endingKind, greatBlockers } from '../engine/flow';
 import { computeCapTable, money, pct } from '../engine/math';
 import { getScene, sceneBody, sceneChoices } from '../engine/reducer';
 import { scoreGame } from '../engine/score';
@@ -43,10 +43,20 @@ export function TitleScreen({
                   <button type="button" className="primary" onClick={() => onContinue(slotId)}>
                     Slot {index + 1}: {save.sceneId === 'ending' ? 'Debrief' : save.sceneId.replaceAll('_', ' ')} · {save.runway.toFixed(1)} mo
                   </button>
-                  <button type="button" onClick={() => onStart(slotId)}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (window.confirm('Replace this save with a new run?')) onStart(slotId);
+                    }}
+                  >
                     New run
                   </button>
-                  <button type="button" onClick={() => onDelete(slotId)}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (window.confirm('Delete this save?')) onDelete(slotId);
+                    }}
+                  >
                     Delete
                   </button>
                 </>
@@ -70,6 +80,7 @@ export function PlayScreen({
   onChoose,
   onRedpen,
   onWireFail,
+  onWireFraud,
   onWireClose,
   onLootClose,
   onOpenTerm,
@@ -78,6 +89,7 @@ export function PlayScreen({
   onChoose: (id: string) => void;
   onRedpen: (ids: string[]) => void;
   onWireFail: (missing: string[]) => void;
+  onWireFraud: () => void;
   onWireClose: () => void;
   onLootClose: () => void;
   onOpenTerm: (id: string) => void;
@@ -113,7 +125,9 @@ export function PlayScreen({
         {scene.kind === 'conversion' && <ConversionMath state={state} />}
         {scene.id === 'redpen_result' && <RedPenResult state={state} />}
         {scene.kind === 'redpen' && <RedPen state={state} onSubmit={onRedpen} />}
-        {scene.kind === 'wire' && <WireChecklist onFail={onWireFail} onClose={onWireClose} />}
+        {scene.kind === 'wire' && (
+          <WireChecklist state={state} onFail={onWireFail} onFraud={onWireFraud} onClose={onWireClose} />
+        )}
         {scene.kind === 'ending' ? null : (
           <ol className="choices">
             {choices.map((choice, index) => (
@@ -295,13 +309,21 @@ export function EndingScreen({
           </li>
         ))}
       </ol>
-      <p className="score-total">Score {score.total}</p>
+      <p className="score-total">
+        Score {score.total} · grades {score.parts.grades} + docs {score.parts.docs} + badges {score.parts.badges} + ending {score.parts.bonus}
+      </p>
       <CapTablePanel state={state} />
       <TermChips state={state} />
       {blockers.length > 0 && (
-        <p className="fine">
-          This close is real. It is not the great-round ending because of: {blockers.join(', ')}.
-        </p>
+        <div className="fine">
+          <p>This close is real. It is not the great-round ending because:</p>
+          <ul>
+            {blockers.slice(0, 3).map((id) => (
+              <li key={id}>{blockerBlurb(id)}</li>
+            ))}
+          </ul>
+          {blockers.length > 3 && <p>And {blockers.length - 3} more.</p>}
+        </div>
       )}
       <section>
         <h2>Roads you did not take</h2>

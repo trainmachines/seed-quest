@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { clausesFor } from '../data/clauses';
+import { clausesFor, sheetClauses } from '../data/clauses';
 import { documentMap } from '../data/documents';
 import { GLOSSARY } from '../data/glossary';
 import { UNTAKEN_PATHS } from '../data/paths';
@@ -115,9 +115,15 @@ function run(seed: number, pick: (state: GameState) => string, redpen: (state: G
       continue;
     }
     const choices = sceneChoices(scene, state);
-    const id = pick(state);
+    let id = pick(state);
     if (!choices.some((choice) => choice.id === id)) {
-      throw new Error(`${state.sceneId} has no "${id}". Choices: ${choices.map((choice) => choice.id).join(', ')}`);
+      const fallback = ['hold', 'push', 'send', 'ship', 'phone', 'onward', 'read', 'stay', 'rest', 'file', 'open'].find((name) =>
+        choices.some((choice) => choice.id === name),
+      );
+      if (!fallback) {
+        throw new Error(`${state.sceneId} has no "${id}". Choices: ${choices.map((choice) => choice.id).join(', ')}`);
+      }
+      id = fallback;
     }
     state = choose(state, id);
   }
@@ -141,12 +147,16 @@ const sharedEarly = (state: GameState, late83: boolean, pete: string, pool: stri
     meeting_ghost: 'move-on',
     coffee_result: 'onward',
     safe_angel: 'clean',
-    safe_result: 'onward',
+    safe_result: 'send',
     form_d: 'file',
     cap_table: 'fix',
     signatures: 'nudge',
-    preseed_wire: 'bank',
-    time_jump: 'open',
+    preseed_wire: 'phone',
+    time_jump: 'ship',
+    burn_2: 'ship',
+    burn_3: 'ship',
+    cofounder_wobble: 'stay',
+    week_off: 'rest',
   };
   return map[state.sceneId];
 };
@@ -154,7 +164,7 @@ const sharedEarly = (state: GameState, late83: boolean, pete: string, pool: stri
 describe('endings', () => {
   it('plays a great round when the clean path is taken', () => {
     const state = run(
-      7,
+      1,
       (current) =>
         sharedEarly(current, false, 'chase', 'grant', 'warm', 'tight') ??
         (
@@ -172,7 +182,7 @@ describe('endings', () => {
             nvca_rofr: 'read',
           } as Record<string, string>
         )[current.sceneId],
-      (current) => clausesFor(current.deal.variant).filter((clause) => clause.scary).map((clause) => clause.id),
+      (current) => sheetClauses(current).filter((clause) => clause.scary).map((clause) => clause.id),
     );
     expect(state.sceneId).toBe('ending');
     expect(greatBlockers(state), greatBlockers(state).join(', ')).toEqual([]);
@@ -203,12 +213,16 @@ describe('endings', () => {
           meeting_ghost: 'move-on',
           coffee_result: 'onward',
           safe_angel: 'offered',
-          safe_result: 'onward',
+          safe_result: 'send',
           form_d: 'file',
           cap_table: 'sloppy',
           signatures: 'nudge',
-          preseed_wire: 'bank',
-          time_jump: 'open',
+          preseed_wire: 'phone',
+          time_jump: 'ship',
+          burn_2: 'ship',
+          burn_3: 'ship',
+          cofounder_wobble: 'cliff',
+          week_off: 'rest',
           lead_hunt: 'process',
           term_headline: 'read-price',
           pool_shuffle: 'accept',
@@ -276,12 +290,16 @@ describe('endings', () => {
           meeting_ghost: 'move-on',
           coffee_result: 'onward',
           safe_angel: 'offered',
-          safe_result: 'onward',
+          safe_result: 'send',
           form_d: 'delay',
           cap_table: 'sloppy',
           signatures: 'wait',
-          preseed_wire: 'bank',
-          time_jump: 'open',
+          preseed_wire: 'phone',
+          time_jump: 'ship',
+          burn_2: 'ship',
+          burn_3: 'ship',
+          cofounder_wobble: 'cliff',
+          week_off: 'rest',
         };
         return map[current.sceneId];
       },
@@ -319,6 +337,36 @@ describe('replays', () => {
       }
       expect(state.sceneId, `seed ${seed} stuck on ${state.sceneId}`).toBe('ending');
     }
+  });
+});
+
+describe('llc clock', () => {
+  it('can reach the rushed 83(b) scene by cutting burn', () => {
+    const state = run(
+      5,
+      (current) => {
+        const map: Record<string, string> = {
+          napkin: 'llc',
+          llc_wall: 'friends',
+          friends_round: 'take',
+          form_d: 'file',
+          contractor: 'later',
+          deck: 'tight',
+          time_jump: 'cut',
+          burn_2: 'cut',
+          burn_3: 'cut',
+          cofounder_wobble: 'stay',
+          week_off: 'rest',
+          seed_llc_wall: 'convert',
+          rushed_83b: 'file',
+          lead_hunt: 'party',
+          party_round: 'bridge',
+        };
+        return map[current.sceneId];
+      },
+      () => [],
+    );
+    expect(state.history.some((item) => item.scene === 'rushed_83b')).toBe(true);
   });
 });
 

@@ -1,10 +1,12 @@
 import { earnedAchievements } from './achievements';
 import { BALANCE } from './balance';
-import { clausesFor } from '../data/clauses';
+import { drawClauses, sheetClauses } from '../data/clauses';
 import { sceneMap } from '../data/scenes';
 import { untakenPaths } from '../data/paths';
+import { unresolvedIssues } from './flow';
 import { computeCapTable } from './math';
 import { priceTermSheet } from './offers';
+import { rngNext } from './rng';
 import type { Choice, Delta, Effects, GameState, Scene } from './types';
 import { defaultDeal, defaultFlags } from './types';
 
@@ -29,6 +31,7 @@ export function createGame(slotId: string, seed = 1): GameState {
     foundersShares: BALANCE.authorized,
     grantedShares: 0,
     poolShares: 0,
+    departedShares: 0,
     unbanked: 0,
     flags: defaultFlags(),
     deal: defaultDeal(),
@@ -80,7 +83,7 @@ export function openScreen(state: GameState, screen: GameState['screen'], glossa
 export function submitRedpen(state: GameState, redlined: string[]): GameState {
   const before = snapshot(state);
   const draft = clone(state);
-  const clauses = clausesFor(draft.deal.variant);
+  const clauses = sheetClauses(draft);
   let scary = 0;
   let caught = 0;
   let foughtNormal = 0;
@@ -91,25 +94,24 @@ export function submitRedpen(state: GameState, redlined: string[]): GameState {
       if (marked) {
         caught += 1;
         if (clause.fixed) draft.deal = { ...draft.deal, ...clause.fixed };
-        draft.reputation += 3;
+        addReputation(draft, 3);
         draft.morale += 2;
       } else {
         if (clause.left) draft.deal = { ...draft.deal, ...clause.left };
-        draft.reputation -= 5;
+        addReputation(draft, -5);
         draft.morale -= 4;
       }
     } else if (marked) {
       foughtNormal += 1;
       draft.flags.foughtStandard = true;
-      draft.reputation -= 6;
+      addReputation(draft, -6);
       draft.morale -= 2;
       draft.runway -= 0.3;
     } else {
-      draft.reputation += 2;
+      addReputation(draft, 2);
     }
   }
   draft.morale = clamp(draft.morale, 0, 100);
-  draft.reputation = clamp(draft.reputation, 0, 100);
   draft.flags.redPenPerfect = caught === scary && foughtNormal === 0;
   const because = draft.flags.redPenPerfect
     ? 'You marked the red flags and left the ordinary terms alone.'
@@ -146,15 +148,39 @@ export function failWire(state: GameState, missing: string[]): GameState {
   return finish(next, before);
 }
 
+export function noteWireFraud(state: GameState): GameState {
+  const before = snapshot(state);
+  const draft = clone(state);
+  draft.runway -= 1.5;
+  draft.morale = clamp(draft.morale - 8, 0, 100);
+  addReputation(draft, -6);
+  draft.flags.wireFraud = true;
+  const because = 'That domain is not your bank. The fake instructions cost a month and a half, and the real wire has not moved.';
+  draft.history.push({ scene: 'wire_day', choice: 'fraud' });
+  let next = stampDelta(before, draft, because);
+  if (next.runway <= 0 && !next.deal.closed) {
+    next.flags.broke = true;
+    next.failReason = 'A lookalike wire email emptied the last of the runway.';
+    next = enterScene(next, 'ending');
+  }
+  return finish(next, before);
+}
+
 export function closeWire(state: GameState): GameState {
   const before = snapshot(state);
   const draft = clone(state);
+  draft.flags.runwayBeforeWire = draft.runway;
+  const issues = unresolvedIssues(draft);
+  if (draft.deal.preMoney && issues >= 2) {
+    draft.deal.preMoney = Math.max(1_000_000, draft.deal.preMoney - 1_000_000);
+  }
   if (draft.deal.newMoney) {
+    draft.deal.newMoney = Math.max(250_000, draft.deal.newMoney - issues * 250_000);
     draft.runway += draft.deal.newMoney / BALANCE.seedBurn;
   }
   draft.deal.closed = true;
   draft.morale = clamp(draft.morale + 6, 0, 100);
-  draft.reputation = clamp(draft.reputation + 4, 0, 100);
+  addReputation(draft, 4);
   addDoc(draft, 'funds-flow');
   addDoc(draft, 'do-insurance');
   addTerm(draft, 'wire');
@@ -169,7 +195,7 @@ function applyChoice(state: GameState, choice: Choice): GameState {
   const effects = choice.effects ?? {};
   if (effects.runway) draft.runway += effects.runway;
   if (effects.morale) draft.morale += effects.morale;
-  if (effects.reputation) draft.reputation += effects.reputation;
+  if (effects.reputation) addReputation(draft, effects.reputation);
   applyClock(draft, effects);
   if (effects.shares) {
     if (effects.shares.founders != null) draft.foundersShares = effects.shares.founders;
@@ -197,15 +223,14 @@ function applyChoice(state: GameState, choice: Choice): GameState {
   }
   const resolved = choice.resolve ? choice.resolve(draft) : draft;
   resolved.morale = clamp(resolved.morale, 0, 100);
-  resolved.reputation = clamp(resolved.reputation, 0, 100);
+  resolved.reputation = clamp(resolved.reputation, 0, 85);
   resolved.history.push({ scene: state.sceneId, choice: choice.id });
   let next = stampDelta(before, resolved, choice.because);
   let dest = typeof choice.next === 'function' ? choice.next(next) : choice.next;
+  dest = divertForMorale(next, dest);
   if (next.runway <= 0 && !next.deal.closed) {
     next.flags.broke = true;
-    next.failReason = next.unbanked > 0
-      ? 'Runway hit zero. A signed SAFE is not cash until it wires.'
-      : `Runway hit zero after ${sceneTitle(state.sceneId)}. The next meeting never got a chance.`;
+    next.failReason = runwayFailReason(state.sceneId, next.unbanked);
     dest = 'ending';
   }
   return finish(enterScene(next, dest), before);
@@ -244,7 +269,7 @@ function enterScene(state: GameState, id: string): GameState {
   const next = clone(state);
   next.sceneId = id;
   next.screen = 'play';
-  if (id === 'term_headline' && next.deal.preMoney == null) {
+  if ((id === 'pool_shuffle' || id === 'term_headline') && next.deal.preMoney == null) {
     const priced = priceTermSheet(next);
     next.rng = priced.state.rng;
     next.deal = {
@@ -258,6 +283,15 @@ function enterScene(state: GameState, id: string): GameState {
       board: 'balanced',
       protective: 'standard',
     };
+    const drawn = drawClauses(next, priced.offer.scaryCount);
+    next.rng = drawn.state.rng;
+    next.deal = { ...next.deal, clauseIds: drawn.clauses.map((clause) => clause.id) };
+  }
+  if (id === 'burn_2' && !next.flags.churnSeen) {
+    const rolled = rngNext(next.rng);
+    next.rng = rolled.next;
+    next.flags.churnSeen = true;
+    next.flags.churnHit = rolled.value < 0.4;
   }
   for (const term of scene.termsOnEnter ?? []) addTerm(next, term);
   for (const doc of scene.docsOnEnter ?? []) addDoc(next, doc);
@@ -338,6 +372,41 @@ function addTerm(state: GameState, id: string): void {
 
 function sceneTitle(id: string): string {
   return sceneMap.get(id)?.title ?? id;
+}
+
+function addReputation(state: GameState, delta: number): void {
+  const applied = delta > 0 ? delta * 0.22 : delta;
+  state.reputation = clamp(state.reputation + applied, 0, 85);
+}
+
+function divertForMorale(state: GameState, dest: string): string {
+  if (dest === 'ending' || state.flags.broke) return dest;
+  if (
+    !state.flags.cofounderWobble &&
+    state.morale < 35 &&
+    state.flags.vesting !== 'unknown' &&
+    state.history.length > 3 &&
+    dest !== 'cofounder_wobble' &&
+    dest !== 'week_off'
+  ) {
+    state.flags.cofounderWobble = true;
+    state.flags.resumeScene = dest;
+    return 'cofounder_wobble';
+  }
+  if (!state.flags.weekOff && state.morale < 20 && dest !== 'week_off' && dest !== 'cofounder_wobble') {
+    state.flags.weekOff = true;
+    state.flags.resumeScene = dest;
+    return 'week_off';
+  }
+  return dest;
+}
+
+function runwayFailReason(sceneId: string, unbanked: number): string {
+  if (unbanked > 0) return 'Runway hit zero. A signed SAFE is not cash until it wires.';
+  if (sceneId.startsWith('burn_')) {
+    return 'Runway hit zero during the months after the pre-seed. The seed meeting never got a chance.';
+  }
+  return `Runway hit zero after ${sceneTitle(sceneId)}. The next meeting never got a chance.`;
 }
 
 function clamp(n: number, min: number, max: number): number {

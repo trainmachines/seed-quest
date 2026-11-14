@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createGame, applyClock } from './reducer';
-import { computeCapTable, describeShuffle, previewPricedRound } from './math';
+import { allocatePricedRound, computeCapTable, describeShuffle, pct, previewPricedRound } from './math';
 import type { SafeNote } from './types';
 
 function safe(partial: Omit<SafeNote, 'order'> & { order: number }): SafeNote {
@@ -46,6 +46,15 @@ describe('post-money SAFE math', () => {
   });
 });
 
+describe('percent formatting', () => {
+  it('does not eat a trailing zero when there is no decimal', () => {
+    expect(pct(0.1, 0)).toBe('10%');
+    expect(pct(0.15, 0)).toBe('15%');
+    expect(pct(1, 0)).toBe('100%');
+    expect(pct(0.2, 0)).toBe('20%');
+  });
+});
+
 describe('option pool shuffle', () => {
   it('computes effective pre-money as headline pre minus pool percent times post-money', () => {
     const shuffle = describeShuffle(12_000_000, 2_500_000, 0.1);
@@ -58,21 +67,43 @@ describe('option pool shuffle', () => {
     expect(bigger.effectivePre).toBeLessThan(shuffle.effectivePre);
   });
 
-  it('takes the pool from founders, not from new investors or post-money SAFEs', () => {
+  it('dilutes SAFE holders when the option pool grows in the priced round', () => {
     const state = createGame('math', 1);
     state.foundersShares = 9_000_000;
-    state.grantedShares = 0;
-    state.poolShares = 1_000_000;
-    state.safes = [safe({ id: 'a', name: 'Harbor', amount: 750_000, cap: 8_000_000, mfn: false, sideLetter: false, homemade: false, order: 0 })];
-    state.deal = { ...state.deal, preMoney: 12_000_000, newMoney: 2_500_000, poolAsk: 0.15, poolTarget: 0.1, variant: 'A', liqPref: '1x-np', antidilution: 'bbwa', board: 'balanced', protective: 'standard' };
-    const low = previewPricedRound(state, 0.1);
-    const high = previewPricedRound(state, 0.15);
-    expect(low.safeDetails[0].pctNow).toBeCloseTo(high.safeDetails[0].pctNow, 8);
-    expect(low.newMoneyPct).toBeCloseTo(high.newMoneyPct, 8);
-    expect(low.newMoneyPct).toBeCloseTo(2.5 / 14.5, 8);
-    expect(low.foundersPct).toBeGreaterThan(high.foundersPct);
-    expect(low.foundersPct).toBeCloseTo(0.65, 2);
-    expect(low.effectivePre).toBe(10_550_000);
+    state.grantedShares = 300_000;
+    state.poolShares = 700_000;
+    state.safes = [
+      safe({ id: 'harbor', name: 'Harbor', amount: 200_000, cap: 8_000_000, mfn: false, sideLetter: false, homemade: false, order: 0 }),
+      safe({ id: 'northline', name: 'Northline', amount: 500_000, cap: 8_000_000, mfn: false, sideLetter: false, homemade: false, order: 1 }),
+    ];
+    state.deal = { ...state.deal, preMoney: 14_000_000, newMoney: 2_500_000, poolAsk: 0.1, poolTarget: 0.1, variant: 'A', liqPref: '1x-np', antidilution: 'bbwa', board: 'balanced', protective: 'standard' };
+    const table = previewPricedRound(state, 0.1);
+    expect(table.foundersPct).toBeCloseTo(0.657, 2);
+    expect(table.safeDetails[0].pctNow).toBeCloseTo(0.02, 3);
+    expect(table.safeDetails[1].pctNow).toBeCloseTo(0.05, 3);
+    expect(table.newMoneyPct).toBeCloseTo(2.5 / 16.5, 6);
+    expect(table.poolPct).toBeCloseTo(0.1, 6);
+    const bigger = previewPricedRound(state, 0.15);
+    expect(bigger.safeDetails[0].pctNow).toBeLessThan(table.safeDetails[0].pctNow);
+    expect(bigger.foundersPct).toBeLessThan(table.foundersPct);
+    expect(bigger.newMoneyPct).toBeCloseTo(table.newMoneyPct, 6);
+    expect(table.effectivePre).toBe(14_000_000 - Math.round(0.1 * 16_500_000));
+  });
+
+  it('converts at the round price when the pre-money is below the cap', () => {
+    const capped = allocatePricedRound({
+      founders: 10_000_000,
+      granted: 0,
+      departed: 0,
+      pool: 0,
+      safes: [{ id: 'a', amount: 500_000, cap: 20_000_000, discount: 0 }],
+      pre: 10_000_000,
+      invested: 2_000_000,
+      poolTarget: 0,
+    });
+    const naiveCapShares = (500_000 / 20_000_000) * (10_000_000 / (1 - 500_000 / 20_000_000));
+    expect(capped.safeShares.a).toBeGreaterThan(naiveCapShares);
+    expect(capped.safeShares.a / capped.total).toBeGreaterThan(0.025);
   });
 });
 

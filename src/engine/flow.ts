@@ -90,7 +90,8 @@ export function greatBlockers(state: GameState): string[] {
   if (state.flags.deck !== 'tight') blockers.push('deck');
   if ((state.deal.poolTarget ?? 1) > 0.1) blockers.push('pool');
   if ((state.deal.newMoney ?? 0) < 2_000_000) blockers.push('check-size');
-  if (state.runway < 18) blockers.push('runway');
+  const beforeWire = state.flags.runwayBeforeWire;
+  if ((beforeWire ?? state.runway) < 9) blockers.push('runway');
   if (state.reputation < 48) blockers.push('reputation');
   if (table.foundersPct < 0.6) blockers.push('equity');
   if (state.missedFormD) blockers.push('form-d');
@@ -116,6 +117,53 @@ export function routeAfterTimeJump(state: GameState): string {
 
 export function routeToTermSheet(state: GameState): string {
   if (state.flags.entity === 'llc') return 'seed_llc_wall';
+  if (state.reputation < 20) return 'lead_walks';
   if (state.flags.vesting === 'none') return 'retrovest';
-  return 'term_headline';
+  return 'pool_shuffle';
+}
+
+export function blockerBlurb(id: string): string {
+  const named: Record<string, string> = {
+    'round-not-closed': 'The priced round never closed.',
+    'liq-pref': 'Liquidation preference: a participating or 2x term stayed in the charter (Red pen).',
+    antidilution: 'Anti-dilution: full ratchet stayed in (Red pen).',
+    board: 'The investors kept control of the board (Red pen).',
+    protective: 'Preferred can veto ordinary hiring (Red pen).',
+    'fought-standard': 'You fought a market term and spent the goodwill (Red pen).',
+    vesting: 'Founder stock never picked up standard vesting.',
+    '83b': 'The 83(b) was missed, so vesting can be taxed later (83(b) clock).',
+    pete: 'Pete never assigned the prototype (Git blame).',
+    advisor: 'An equity promise was off the cap table, or it was fixed late.',
+    'cap-table': 'The cap table did not tie out.',
+    'messy-docs': 'The minute book was still a template when counsel opened it.',
+    entity: 'The company was not a Delaware C-corp at the close.',
+    'side-letter': 'A pro rata side letter survived into the round.',
+    mfn: 'An MFN clause was still sitting on a SAFE.',
+    build: 'You raised before there was much to diligence.',
+    deck: 'The deck was too long to support the ask.',
+    pool: 'The option pool stayed larger than 10% of the post-money.',
+    'check-size': 'The new money was under $2M after any re-trade.',
+    runway: 'You reached the wire with too little cash already in the bank.',
+    reputation: 'Reputation was too thin for a great round.',
+    equity: 'Founders finished under 60% fully diluted.',
+    'form-d': 'Form D was late.',
+    skim: 'Too many NVCA documents were skimmed.',
+    indemnity: 'You closed on an IP indemnity instead of an assignment.',
+  };
+  if (id.startsWith('docs:')) {
+    return `The data room was still missing ${id.slice(5).split(',').join(', ')}.`;
+  }
+  return named[id] ?? id;
+}
+
+export function unresolvedIssues(state: GameState): number {
+  let count = 0;
+  if (state.flags.pete === 'ghost') count += 1;
+  if (state.missed83b) count += 1;
+  if (state.missedFormD) count += 1;
+  if (state.flags.sloppySheet || state.flags.advisor === 'off-sheet') count += 1;
+  if (state.flags.ipIndemnity) count += 1;
+  if (state.flags.messyDocs) count += 1;
+  const missing = gapDocIds(state).filter((id) => id !== 'contractor-ip');
+  return count + missing.length;
 }

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { clausesFor } from '../data/clauses';
+import { sheetClauses } from '../data/clauses';
 import { computeCapTable, describeShuffle, money, pct, previewPricedRound } from '../engine/math';
 import type { Choice, GameState } from '../engine/types';
 
@@ -101,7 +101,7 @@ export function ShufflePreview({ state, choices, focusId }: { state: GameState; 
 }
 
 export function RedPen({ state, onSubmit }: { state: GameState; onSubmit: (ids: string[]) => void }) {
-  const clauses = clausesFor(state.deal.variant);
+  const clauses = sheetClauses(state);
   const [marked, setMarked] = useState<string[]>([]);
   function toggle(id: string) {
     setMarked((current) => (current.includes(id) ? current.filter((item) => item !== id) : [...current, id]));
@@ -137,7 +137,7 @@ export function RedPen({ state, onSubmit }: { state: GameState; onSubmit: (ids: 
 export function RedPenResult({ state }: { state: GameState }) {
   const entry = [...state.history].reverse().find((item) => item.choice.startsWith('redpen:'));
   const marked = entry ? entry.choice.replace('redpen:', '').split('+').filter(Boolean) : [];
-  const clauses = clausesFor(state.deal.variant);
+  const clauses = sheetClauses(state);
   return (
     <ul className="result-list">
       {clauses.map((clause) => {
@@ -154,30 +154,93 @@ export function RedPenResult({ state }: { state: GameState }) {
   );
 }
 
-export const WIRE_ITEMS = [
-  { id: 'cofounder', label: 'Co-founder signed the Stock Purchase Agreement', blocking: true, hint: 'DocuSign status: viewed, not signed.' },
-  { id: 'lead', label: 'Lead investor signature page is in', blocking: true, hint: '' },
-  { id: 'charter', label: 'Amended and Restated Certificate of Incorporation is filed in Delaware', blocking: true, hint: '' },
-  { id: 'consent', label: 'Board and stockholder consents are signed', blocking: true, hint: '' },
-  { id: 'funds', label: 'Funds-flow matches the wires, confirmed by phone', blocking: true, hint: 'Do not trust wire instructions that arrived only by email.' },
-  { id: 'formd', label: 'Calendar reminder: Form D is due within 15 days of this sale', blocking: false, hint: 'This notice does not release the wire. Signatures do.' },
-];
+export interface WireItem {
+  id: string;
+  label: string;
+  blocking: boolean;
+  decoy?: boolean;
+  done?: boolean;
+  hint: string;
+}
+
+export function wireItems(state: GameState): WireItem[] {
+  const nudged = state.history.some((item) => item.choice === 'nudge');
+  const items: WireItem[] = [
+    {
+      id: 'cofounder',
+      label: 'Co-founder signature on the Stock Purchase Agreement',
+      blocking: true,
+      done: nudged,
+      hint: nudged ? 'They signed when you nudged the packet.' : 'DocuSign still says viewed. You waited on this one.',
+    },
+    { id: 'lead', label: 'Lead investor signature page is in', blocking: true, hint: 'The lead does not wire on a verbal yes.' },
+    {
+      id: 'charter',
+      label: 'Amended and Restated Certificate of Incorporation is filed in Delaware',
+      blocking: true,
+      done: state.docs.includes('amended-coi'),
+      hint: 'Preferred stock has to exist before the money moves.',
+    },
+    { id: 'consent', label: 'Board and stockholder consents are signed', blocking: true, hint: 'A Slack yes is not a consent.' },
+    {
+      id: 'funds',
+      label: 'Funds-flow matches the wires, and you confirmed instructions by a phone number you already had',
+      blocking: true,
+      hint: 'Do not trust wire instructions that arrived only by email.',
+    },
+  ];
+  if (state.flags.pete === 'ghost') {
+    items.push({
+      id: 'pete',
+      label: 'Pete’s IP assignment is in the closing packet',
+      blocking: true,
+      hint: 'The repo still has Pete’s commits and no signature.',
+    });
+  }
+  items.push({
+    id: 'formd',
+    label: 'Calendar reminder: Form D is due within 15 days of this sale',
+    blocking: false,
+    done: state.filedFormD,
+    hint: 'This notice does not release the wire. Signatures do.',
+  });
+  items.push({
+    id: 'fraud',
+    label: 'New wire instructions from kindling-capital.co',
+    blocking: false,
+    decoy: true,
+    hint: 'The real firm is not this domain. A lookalike email is a fraud.',
+  });
+  return items;
+}
 
 export function WireChecklist({
+  state,
   onFail,
+  onFraud,
   onClose,
 }: {
+  state: GameState;
   onFail: (missing: string[]) => void;
+  onFraud: () => void;
   onClose: () => void;
 }) {
-  const [checked, setChecked] = useState<string[]>([]);
+  const items = wireItems(state);
+  const [checked, setChecked] = useState<string[]>(items.filter((item) => item.done).map((item) => item.id));
   const [celebrating, setCelebrating] = useState(false);
+  const [ready, setReady] = useState(false);
   const [misses, setMisses] = useState<string[]>([]);
   function toggle(id: string) {
     setChecked((current) => (current.includes(id) ? current.filter((item) => item !== id) : [...current, id]));
   }
   function release() {
-    const missing = WIRE_ITEMS.filter((item) => item.blocking && !checked.includes(item.id)).map((item) => item.label);
+    if (checked.includes('fraud')) {
+      setMisses(['That email is not your bank.']);
+      onFraud();
+      setChecked((current) => current.filter((id) => id !== 'fraud'));
+      return;
+    }
+    const missing = items.filter((item) => item.blocking && !checked.includes(item.id)).map((item) => item.label);
     if (missing.length) {
       setMisses(missing);
       onFail(missing);
@@ -185,6 +248,7 @@ export function WireChecklist({
     }
     setMisses([]);
     setCelebrating(true);
+    window.setTimeout(() => setReady(true), 3200);
   }
   return (
     <form
@@ -195,14 +259,15 @@ export function WireChecklist({
       }}
     >
       <ul className="clauses">
-        {WIRE_ITEMS.map((item) => (
-          <li key={item.id} className={misses.some((miss) => miss === item.label) ? 'result-cost' : ''}>
+        {items.map((item) => (
+          <li key={item.id} className={item.decoy ? 'decoy' : misses.some((miss) => miss === item.label) ? 'result-cost' : ''}>
             <label>
               <input type="checkbox" checked={checked.includes(item.id)} onChange={() => toggle(item.id)} />
               <span>
                 <strong>{item.label}</strong>
                 {item.hint && <span>{item.hint}</span>}
-                {!item.blocking && <span>Does not hold the wire.</span>}
+                {item.decoy && <span>Do not treat this as a closing item.</span>}
+                {!item.blocking && !item.decoy && <span>Does not hold the wire.</span>}
               </span>
             </label>
           </li>
@@ -213,10 +278,14 @@ export function WireChecklist({
           <div className="wire-track" aria-hidden="true">
             <span className="wire-dot" />
           </div>
-          <p className="stamp">Wire received</p>
-          <button type="button" className="primary" onClick={onClose}>
-            Count the money
-          </button>
+          <p className="stamp">{ready ? 'Wire received' : 'Wire in transit'}</p>
+          {ready ? (
+            <button type="button" className="primary" onClick={onClose}>
+              Count the money
+            </button>
+          ) : (
+            <p>The bank is still moving the money.</p>
+          )}
         </div>
       ) : (
         <button type="submit" className="primary">

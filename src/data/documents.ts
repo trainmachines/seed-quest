@@ -54,6 +54,30 @@ export const DOCUMENTS: DataRoomDoc[] = [
     gotcha: 'A priced round needs an Amended and Restated Certificate, not a side email. A Wyoming filing is a different document.',
   }),
   doc({
+    id: 'wyoming-charter',
+    folder: 'Corporate',
+    name: 'Wyoming Charter',
+    round: 'Pre-seed',
+    critical: false,
+    preparable: false,
+    what: 'The formation filing in Wyoming. It is not a Delaware certificate of incorporation.',
+    why: 'A lead’s counsel uses it to see what actually exists, and then asks for Delaware.',
+    usedFor: 'The cleanup conversation, not the priced-round charter.',
+    gotcha: 'Counsel usually will not file preferred stock into this document.',
+  }),
+  doc({
+    id: '83b-memo',
+    folder: 'Cap Table & Equity',
+    name: '83(b) Disclosure Memo',
+    round: 'Seed',
+    critical: false,
+    preparable: false,
+    what: 'A short memo that the 83(b) window was missed and what tax reserve the founders set aside.',
+    why: 'Investors want the miss on paper. It is not the company’s tax return.',
+    usedFor: 'The disclosure schedule and the founder tax conversation.',
+    gotcha: 'A company tax return does not replace this memo, and the memo does not revive a late election.',
+  }),
+  doc({
     id: 'bylaws',
     folder: 'Corporate',
     name: 'Bylaws',
@@ -99,7 +123,7 @@ export const DOCUMENTS: DataRoomDoc[] = [
     what: 'A recent Delaware certificate saying the company is paid up and in existence.',
     why: 'Closing counsel wants a fresh one, not a screenshot of the state website.',
     usedFor: 'A standard seed closing condition.',
-    gotcha: 'Order it close to closing. A six-month-old PDF gets rejected.',
+    gotcha: 'Counsel usually wants one dated close to closing. A six-month-old PDF often gets sent back.',
   }),
   doc({
     id: 'stockholder-consent',
@@ -223,7 +247,7 @@ export const DOCUMENTS: DataRoomDoc[] = [
   }),
   doc({
     id: 'form-d',
-    folder: 'Cap Table & Equity',
+    folder: 'Legal & Compliance',
     name: 'Form D and State Notices',
     round: 'Both',
     critical: true,
@@ -303,7 +327,7 @@ export const DOCUMENTS: DataRoomDoc[] = [
     what: 'Proof the company, not a founder’s personal login, owns the domain, repo, and app stores.',
     why: 'A domain in a personal name is a small fact that looks sloppy in diligence.',
     usedFor: 'IP and commercial diligence.',
-    gotcha: 'Transfer the registrar login to a company email before the round, not during it.',
+    gotcha: 'Founders often leave the registrar login on a personal email. Diligence asks for a company account.',
   }),
   doc({
     id: 'oss-inventory',
@@ -435,7 +459,7 @@ export const DOCUMENTS: DataRoomDoc[] = [
     what: 'A short agreement that states the equity, the vesting, and the IP terms for an advisor.',
     why: 'It replaces the verbal promise that breaks the cap table.',
     usedFor: 'The cap table and the stock ledger.',
-    gotcha: 'Take advisor grants from the pool you already reserved, in writing, before the seed.',
+    gotcha: 'Counsel usually asks for the grant in writing, taken from the pool, before the seed.',
   }),
   doc({
     id: 'customer-lois',
@@ -682,3 +706,7 @@ export const DOCUMENTS: DataRoomDoc[] = [
 export const documentMap = new Map(DOCUMENTS.map((entry) => [entry.id, entry]));
 
 export const PREPARABLE_DOC_IDS = DOCUMENTS.filter((entry) => entry.preparable).map((entry) => entry.id);
+
+export function preparableFor(state: { flags: { advisor: string } }): string[] {
+  return PREPARABLE_DOC_IDS.filter((id) => !(id === 'advisor-agreements' && state.flags.advisor !== 'in-pool'));
+}

@@ -13,8 +13,11 @@ import type { GameState, SafeNote } from './types';
  * New investors own new money / post-money. They are not diluted by the pool.
  * The unissued pool is resized inside the pre-money (the option pool shuffle).
  * Effective pre-money = headline pre-money − (pool % × post-money).
- * Post-money SAFE holders keep amount/cap of the pre-money company, then
- * get diluted by the new money only. The pool comes out of the founders.
+ * In the priced round, a pool increase is not in the SAFE's company
+ * capitalization, so the top-up dilutes SAFE holders and founders together.
+ * New investors still own new money / post-money. They are not diluted by the pool.
+ * The cap is a ceiling on price: if the pre-money is below the cap, the SAFE
+ * converts at the round price instead (min of cap price and round price).
  */
 
 export interface SafeDetail {
@@ -33,6 +36,7 @@ export interface CapTableResult {
   stage: 'pre-round' | 'post-round';
   foundersPct: number;
   grantedPct: number;
+  departedPct: number;
   poolPct: number;
   safePct: number;
   newMoneyPct: number;
@@ -80,7 +84,7 @@ export function describeShuffle(pre: number, invested: number, pool: number): {
 export function computeCapTable(state: GameState): CapTableResult {
   const details: SafeDetail[] = state.safes.map((safe) => {
     const { cap, mfnApplied } = effectiveCap(safe, state.safes);
-    const pct = safe.amount / cap;
+    const pct = cap > 0 ? safe.amount / cap : 0;
     return {
       id: safe.id,
       name: safe.name,
@@ -94,10 +98,12 @@ export function computeCapTable(state: GameState): CapTableResult {
     };
   });
   const p = details.reduce((sum, detail) => sum + detail.pctPreRound, 0);
-  const base = state.foundersShares + state.grantedShares + state.poolShares;
+  const departed = state.departedShares ?? 0;
+  const base = state.foundersShares + state.grantedShares + state.poolShares + departed;
   const remain = Math.max(0, 1 - p);
   const foundersShare = base > 0 ? state.foundersShares / base : 1;
   const grantedShare = base > 0 ? state.grantedShares / base : 0;
+  const departedShare = base > 0 ? departed / base : 0;
   const poolShare = base > 0 ? state.poolShares / base : 0;
 
   const deal = state.deal;
@@ -113,17 +119,19 @@ export function computeCapTable(state: GameState): CapTableResult {
   if (!priced) {
     const foundersPct = foundersShare * remain;
     const grantedPct = grantedShare * remain;
+    const departedPct = departedShare * remain;
     const poolPct = poolShare * remain;
     return {
       stage: 'pre-round',
       foundersPct,
       grantedPct,
+      departedPct,
       poolPct,
       safePct: p,
       newMoneyPct: 0,
       safeDetails: details,
       offSheetPct,
-      totalDisplayed: foundersPct + grantedPct + poolPct + p + offSheetPct,
+      totalDisplayed: foundersPct + grantedPct + departedPct + poolPct + p + offSheetPct,
       headlinePre: deal.preMoney,
       newMoney: deal.newMoney,
       postMoney: deal.preMoney != null && deal.newMoney != null ? deal.preMoney + deal.newMoney : null,
@@ -143,27 +151,42 @@ export function computeCapTable(state: GameState): CapTableResult {
   const invested = deal.newMoney as number;
   const poolTarget = deal.poolTarget as number;
   const shuffle = describeShuffle(pre, invested, poolTarget);
+  const allocation = allocatePricedRound({
+    founders: state.foundersShares,
+    granted: state.grantedShares,
+    departed,
+    pool: state.poolShares,
+    safes: details.map((detail) => ({
+      id: detail.id,
+      amount: detail.amount,
+      cap: detail.cap,
+      discount: state.safes.find((safe) => safe.id === detail.id)?.discount ?? 0,
+    })),
+    pre,
+    invested,
+    poolTarget,
+  });
   const diluted = details.map((detail) => ({
     ...detail,
-    pctNow: detail.pctPreRound * (pre / shuffle.post),
+    pctNow: (allocation.safeShares[detail.id] ?? 0) / allocation.total,
   }));
   const safePct = diluted.reduce((sum, detail) => sum + detail.pctNow, 0);
   const newMoneyPct = shuffle.newPct;
-  const residual = 1 - newMoneyPct - poolTarget - safePct;
-  const founderGrant = state.foundersShares + state.grantedShares;
-  const foundersPct = founderGrant > 0 ? residual * (state.foundersShares / founderGrant) : residual;
-  const grantedPct = founderGrant > 0 ? residual * (state.grantedShares / founderGrant) : 0;
+  const foundersPct = state.foundersShares / allocation.total;
+  const grantedPct = state.grantedShares / allocation.total;
+  const departedPct = departed / allocation.total;
 
   return {
     stage: 'post-round',
     foundersPct,
     grantedPct,
+    departedPct,
     poolPct: poolTarget,
     safePct,
     newMoneyPct,
     safeDetails: diluted,
     offSheetPct,
-    totalDisplayed: foundersPct + grantedPct + poolTarget + safePct + newMoneyPct + offSheetPct,
+    totalDisplayed: foundersPct + grantedPct + departedPct + poolTarget + safePct + newMoneyPct + offSheetPct,
     headlinePre: pre,
     newMoney: invested,
     postMoney: shuffle.post,
@@ -198,7 +221,46 @@ export function pct(fraction: number, digits = 2): string {
 }
 
 function trim(n: number, digits = 2): string {
-  return n.toFixed(digits).replace(/\.?0+$/, '');
+  const text = n.toFixed(digits);
+  return digits > 0 ? text.replace(/\.?0+$/, '') : text;
+}
+
+/**
+ * Share counts once a priced round is closed.
+ * Cap-binding SAFEs convert on the pre-increase capitalization (amount / cap).
+ * A pool top-up is outside that capitalization, so it dilutes SAFE holders too.
+ * If the pre-money is below a cap, that SAFE converts at the round price
+ * (or the discounted round price), which is min(cap price, round price).
+ */
+export function allocatePricedRound(input: {
+  founders: number;
+  granted: number;
+  departed: number;
+  pool: number;
+  safes: { id: string; amount: number; cap: number; discount: number }[];
+  pre: number;
+  invested: number;
+  poolTarget: number;
+}): { total: number; safeShares: Record<string, number> } {
+  const people = input.founders + input.granted + input.departed;
+  const E = people + Math.max(0, input.pool);
+  const capSafes = input.safes.filter((safe) => safe.cap > 0 && safe.cap <= input.pre);
+  const floatSafes = input.safes.filter((safe) => !(safe.cap > 0 && safe.cap <= input.pre));
+  const sold = capSafes.reduce((sum, safe) => sum + safe.amount / safe.cap, 0);
+  const C = sold < 0.95 ? E / (1 - sold) : E;
+  const capShares: Record<string, number> = {};
+  for (const safe of capSafes) capShares[safe.id] = (safe.amount / safe.cap) * C;
+  const fixed = people + Object.values(capShares).reduce((sum, shares) => sum + shares, 0);
+  const adjusted = floatSafes.reduce((sum, safe) => sum + safe.amount / Math.max(0.05, 1 - safe.discount), 0);
+  const k = 1 - adjusted / input.pre - (input.poolTarget * (input.pre + input.invested)) / input.pre;
+  const preFD = k > 0.02 ? fixed / k : fixed;
+  const total = (preFD * (input.pre + input.invested)) / input.pre;
+  const roundPrice = input.pre / preFD;
+  const safeShares = { ...capShares };
+  for (const safe of floatSafes) {
+    safeShares[safe.id] = safe.amount / (roundPrice * Math.max(0.05, 1 - safe.discount));
+  }
+  return { total, safeShares };
 }
 
 export function wordCount(text: string): number {

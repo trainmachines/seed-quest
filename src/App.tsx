@@ -9,6 +9,7 @@ import {
   dismissLoot,
   failWire,
   getScene,
+  noteWireFraud,
   openScreen,
   sceneChoices,
   submitRedpen,
@@ -46,6 +47,12 @@ export function App() {
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        if (!state) return;
+        if (state.pendingLoot.length) commit(dismissLoot(state));
+        else if (state.screen !== 'play') commit(openScreen(state, 'play'));
+        return;
+      }
       const target = event.target as HTMLElement | null;
       if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) return;
       if (event.key === 'm' || event.key === 'M') {
@@ -55,11 +62,6 @@ export function App() {
         return;
       }
       if (!state) return;
-      if (event.key === 'Escape') {
-        if (state.pendingLoot.length) commit(dismissLoot(state));
-        else if (state.screen !== 'play') commit(openScreen(state, 'play'));
-        return;
-      }
       if (event.key === 'd' || event.key === 'D') {
         commit(openScreen(state, state.screen === 'dataroom' ? 'play' : 'dataroom'));
         return;
@@ -140,6 +142,7 @@ export function App() {
           onChoose={(id) => commit(choose(state, id))}
           onRedpen={(ids) => commit(submitRedpen(state, ids))}
           onWireFail={(missing) => commit(failWire(state, missing))}
+          onWireFraud={() => commit(noteWireFraud(state))}
           onWireClose={() => commit(closeWire(state))}
           onLootClose={() => commit(dismissLoot(state))}
           onOpenTerm={(id) => commit(openScreen({ ...state, pendingLoot: [] }, 'glossary', id))}

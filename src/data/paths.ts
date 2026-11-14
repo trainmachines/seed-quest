@@ -21,7 +21,7 @@ export const UNTAKEN_PATHS: UntakenPath[] = [
     title: 'A same-night Wyoming filing',
     lesson: 'Speed feels like progress. Lead counsel still asks for Delaware, and the cleanup lands in diligence.',
     glossaryId: 'delaware-c-corp',
-    when: (s) => s.flags.entity === 'delaware' && s.flags.counsel !== 'none',
+    when: (s) => s.flags.entity === 'delaware' && !s.flags.startedAsWyoming && s.history[0]?.choice !== 'wyoming',
   },
   {
     id: 'missed-83b',

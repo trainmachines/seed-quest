@@ -64,25 +64,34 @@ export interface PricedOffer {
   newMoney: number;
   poolAsk: number;
   variant: 'A' | 'B';
+  scaryCount: number;
+  pass: boolean;
 }
 
-/** Term-sheet economics. fastSheet and thin prep get a smaller round. */
+/** Term-sheet economics. Reputation sets how sharp the draft is. */
 export function priceTermSheet(state: GameState): { state: GameState; offer: PricedOffer } {
   const { value, next } = rngNext(state.rng);
   const variant: 'A' | 'B' = value < 0.5 ? 'A' : 'B';
   const quality = offerScore(state);
-  let offer: PricedOffer;
+  let preMoney = 9_000_000;
+  let newMoney = 1_500_000;
   if (state.flags.fastSheet) {
-    offer = { preMoney: 10_000_000, newMoney: 1_800_000, poolAsk: 0.15, variant };
+    preMoney = 10_000_000;
+    newMoney = 1_800_000;
   } else if (quality >= 3 && state.flags.hired) {
-    offer = { preMoney: 14_000_000, newMoney: 2_500_000, poolAsk: 0.1, variant };
+    preMoney = 14_000_000;
+    newMoney = 2_500_000;
   } else if (quality >= 2) {
-    offer = { preMoney: 12_000_000, newMoney: 2_500_000, poolAsk: 0.15, variant };
-  } else {
-    offer = { preMoney: 9_000_000, newMoney: 1_500_000, poolAsk: 0.15, variant };
+    preMoney = 12_000_000;
+    newMoney = 2_500_000;
   }
-  if (state.flags.vesting === 'none') {
-    offer = { ...offer, newMoney: Math.round(offer.newMoney * 0.85) };
-  }
-  return { state: { ...state, rng: next }, offer };
+  if (state.flags.vesting === 'none') newMoney = Math.round(newMoney * 0.85);
+  const rep = state.reputation;
+  const pass = rep < 20;
+  const poolAsk = rep >= 70 ? 0.1 : rep <= 30 ? 0.2 : 0.15;
+  const scaryCount = rep >= 70 ? 1 : rep <= 30 ? 3 : 2;
+  return {
+    state: { ...state, rng: next },
+    offer: { preMoney, newMoney, poolAsk, variant, scaryCount, pass },
+  };
 }

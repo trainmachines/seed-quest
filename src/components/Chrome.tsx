@@ -61,9 +61,12 @@ export function CapTablePanel({ state, highlight = false }: { state: GameState; 
         </span>
       </div>
       <Stacked table={table} unchanged={state.lastDelta?.unchangedSafeIds ?? []} shifted={state.lastDelta?.shiftedSafeIds ?? []} />
+      <details className="cap-more">
+        <summary>Cap table rows</summary>
       <ul className="cap-rows">
         <Row name="Founders" value={table.foundersPct} />
         {table.grantedPct > 0.0005 && <Row name="Granted" value={table.grantedPct} />}
+        {table.departedPct > 0.0005 && <Row name="Departed co-founder" value={table.departedPct} />}
         <Row name="Unissued pool" value={table.poolPct} />
         {table.safeDetails.map((safe) => (
           <li key={safe.id} className={rowClass(safe.id, state.lastDelta)}>
@@ -72,7 +75,7 @@ export function CapTablePanel({ state, highlight = false }: { state: GameState; 
               {safe.homemade ? ' · redo' : ''}
               <small>
                 {' '}
-                {money(safe.amount)} ÷ {money(safe.cap)}
+                {safe.cap > 0 ? `${money(safe.amount)} ÷ ${money(safe.cap)}` : 'discount, price set at the round'}
                 {safe.mfnApplied ? ' · MFN cap' : ''}
               </small>
             </span>
@@ -92,6 +95,7 @@ export function CapTablePanel({ state, highlight = false }: { state: GameState; 
           Effective pre-money {money(table.effectivePre)} = {money(table.headlinePre)} − ({pct(table.poolTarget, 0)} × {money(table.postMoney)})
         </p>
       )}
+      </details>
     </div>
   );
 }
@@ -168,7 +172,8 @@ export function DeltaBanner({ delta }: { delta: Delta }) {
 function chip(label: string, value: number, suffix: string, epsilon: number): string | null {
   if (Math.abs(value) < epsilon) return null;
   const sign = value > 0 ? '+' : '−';
-  const shown = Math.abs(value) >= 10 ? Math.abs(value).toFixed(0) : Math.abs(value).toFixed(1);
+  const abs = Math.abs(value);
+  const shown = Math.abs(abs - Math.round(abs)) < 0.05 ? String(Math.round(abs)) : abs.toFixed(1);
   return `${label} ${sign}${shown}${suffix}`;
 }
 

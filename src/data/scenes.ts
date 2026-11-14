@@ -2,7 +2,7 @@ import { BALANCE } from '../engine/balance';
 import { DILIGENCE_CHAIN, gapDocIds, nextDiligence, routeAfterTimeJump, routeToTermSheet } from '../engine/flow';
 import { angelOffer, fundOffer, hasFund, offerScore, rollCoffee, rollMeeting } from '../engine/offers';
 import type { Choice, GameState, Scene } from '../engine/types';
-import { PREPARABLE_DOC_IDS } from './documents';
+import { preparableFor } from './documents';
 
 const CORPORATE = ['coi', 'bylaws', 'incorporator', 'board-consent', 'stockholder-consent', 'good-standing', 'minute-book'];
 
@@ -33,11 +33,63 @@ function nvcaChoices(current: string): Choice[] {
       id: 'skim',
       label: 'Skim it and trust the summary.',
       because: 'Skimming is faster until counsel reopens a rep you did not read.',
-      effects: { morale: 3, reputation: -3 },
-      resolve: (draft) => {
-        draft.flags.skimCount += 1;
-        if (draft.flags.skimCount >= 3) draft.runway -= 0.4;
-        return draft;
+        effects: { morale: 3, reputation: -3 },
+        resolve: (draft) => {
+          draft.flags.skimCount += 1;
+          if (draft.morale > 70) draft.reputation = Math.min(85, draft.reputation + 1);
+          if (draft.flags.skimCount >= 3) draft.runway -= draft.morale > 70 ? 0.15 : 0.4;
+          return draft;
+        },
+      next,
+      destinations,
+    },
+  ];
+}
+
+function burnBeat(nextId: string, harsh = false): Choice[] {
+  const shipRunway = harsh ? -4.6 : -3.2;
+  const cutRunway = harsh ? -2.6 : -1.8;
+  const last = nextId === 'after-burn';
+  const next = last ? routeAfterTimeJump : nextId;
+  const destinations = last ? ['ending', 'seed_llc_wall', 'lead_hunt'] : [nextId];
+  return [
+    {
+      id: 'ship',
+      label: harsh ? 'Cover the partner and keep shipping.' : 'Keep shipping at this burn.',
+      because: harsh
+        ? 'You save the reference and spend the cash. The meter drops harder this quarter.'
+        : 'Salaries come off the runway. The product moves. Payroll does not negotiate.',
+      effects: { runway: shipRunway, morale: harsh ? -6 : -2, reputation: 1 },
+      next,
+      destinations,
+    },
+    {
+      id: 'cut',
+      label: 'Cut burn. Pause a hire and drop founder pay.',
+      because: 'You buy months and spend morale. A smaller burn is a plan, not a mood.',
+      effects: { runway: cutRunway, morale: -6, reputation: -2 },
+      next,
+      destinations,
+    },
+    {
+      id: 'bridge',
+      label: 'Raise a $150k bridge at a $7M post-money cap.',
+      because: 'The bridge wires. Earlier post-money SAFEs keep their percent. Founders take this dilution.',
+      effects: {
+        morale: -2,
+        reputation: -3,
+        bankNewSafes: true,
+        safes: [
+          {
+            id: `bridge-${nextId}`,
+            name: 'Interim bridge',
+            amount: 150_000,
+            cap: 7_000_000,
+            mfn: false,
+            sideLetter: false,
+            homemade: false,
+          },
+        ],
       },
       next,
       destinations,
@@ -45,26 +97,28 @@ function nvcaChoices(current: string): Choice[] {
   ];
 }
 
-function bridgeChoice(): Choice {
+function bridgeChoice(asNote = false): Choice {
   return {
     id: 'bridge',
-    label: 'Sign a $400k bridge SAFE at a $7M post-money cap.',
-    because: 'The bridge wires. Earlier post-money SAFEs keep their percent. Founders take the new dilution. There is no lead in this ending.',
+    label: asNote ? 'Sign a $400k bridge note. A SAFE needs a corporation.' : 'Sign a $400k bridge SAFE at a $7M post-money cap.',
+    because: asNote
+      ? 'The note wires and is marked for a redo. A SAFE is built for a corporation, not this LLC.'
+      : 'The bridge wires. Earlier post-money SAFEs keep their percent. Founders take the new dilution. There is no lead in this ending.',
     effects: {
       morale: -3,
       reputation: -4,
       bankNewSafes: true,
-      safes: [
-        {
-          id: 'bridge',
-          name: 'Bridge SAFE',
-          amount: 400_000,
-          cap: 7_000_000,
-          mfn: false,
-          sideLetter: false,
-          homemade: false,
-        },
-      ],
+        safes: [
+          {
+            id: 'bridge',
+            name: asNote ? 'Bridge note' : 'Bridge SAFE',
+            amount: 400_000,
+            cap: 7_000_000,
+            mfn: false,
+            sideLetter: false,
+            homemade: asNote,
+          },
+        ],
     },
     deal: { bridge: true },
     terms: ['bridge-round'],
@@ -79,12 +133,11 @@ function safeChoices(state: GameState): Choice[] {
   if (fund) {
     choices.push({
       id: 'clean',
-      label: 'Both checks on one $8M post-money SAFE. No MFN, no discount, no side letter.',
+      label: 'Both checks on the same standard $8M post-money SAFE. No MFN, no side letter.',
       because: 'One standard form. Harbor’s percent will not move when Northline’s SAFE stacks on top.',
       effects: {
         reputation: 6,
         morale: 1,
-        noteFirstSale: true,
         safes: [
           { id: 'harbor', name: 'Harbor', amount: angel.amount, cap: angel.highCap, mfn: false, sideLetter: false, homemade: false },
           { id: 'northline', name: 'Northline', amount: fund.amount, cap: fund.cap, mfn: false, sideLetter: false, homemade: false },
@@ -94,13 +147,27 @@ function safeChoices(state: GameState): Choice[] {
       next: 'safe_result',
     });
     choices.push({
+      id: 'discount',
+      label: 'Harbor takes a 20% discount and no cap. Northline stays on the $8M SAFE.',
+      because: 'A discount is not stacked on a cap. A high seed price favors you. A low one favors Harbor.',
+      effects: {
+        reputation: 2,
+        morale: -1,
+        safes: [
+          { id: 'harbor', name: 'Harbor', amount: angel.amount, cap: 0, discount: 0.2, mfn: false, sideLetter: false, homemade: false },
+          { id: 'northline', name: 'Northline', amount: fund.amount, cap: fund.cap, mfn: false, sideLetter: false, homemade: false },
+        ],
+      },
+      docs: ['safes'],
+      next: 'safe_result',
+    });
+    choices.push({
       id: 'offered',
       label: 'Take both as offered. Harbor keeps the lower cap, the MFN, and the side letter.',
-      because: 'You take the money as written. The side letter and MFN will wake up in the priced round.',
+      because: 'The MFN wakes up if you sign a cheaper SAFE before the seed closes. The side letter wakes up in the round.',
       effects: {
         morale: 4,
         reputation: -3,
-        noteFirstSale: true,
         safes: [
           { id: 'harbor', name: 'Harbor', amount: angel.amount, cap: angel.lowCap, mfn: true, sideLetter: true, homemade: false },
           { id: 'northline', name: 'Northline', amount: fund.amount, cap: fund.cap, mfn: false, sideLetter: false, homemade: false },
@@ -117,7 +184,6 @@ function safeChoices(state: GameState): Choice[] {
       effects: {
         reputation: 3,
         morale: -5,
-        noteFirstSale: true,
         safes: [
           { id: 'northline', name: 'Northline', amount: fund.amount, cap: fund.cap, mfn: false, sideLetter: false, homemade: false },
         ],
@@ -133,7 +199,6 @@ function safeChoices(state: GameState): Choice[] {
       effects: {
         reputation: 3,
         morale: -3,
-        noteFirstSale: true,
         safes: [
           { id: 'harbor', name: 'Harbor', amount: angel.amount, cap: angel.highCap, mfn: false, sideLetter: false, homemade: false },
         ],
@@ -148,7 +213,6 @@ function safeChoices(state: GameState): Choice[] {
       effects: {
         morale: 3,
         reputation: -3,
-        noteFirstSale: true,
         safes: [
           { id: 'harbor', name: 'Harbor', amount: angel.amount, cap: angel.lowCap, mfn: true, sideLetter: true, homemade: false },
         ],
@@ -161,11 +225,14 @@ function safeChoices(state: GameState): Choice[] {
       choices.push({
         id: 'wait',
         label: 'Wait a month and try to bring a fund in.',
-        because: 'A month of burn buys a chance at a lead check. It does not guarantee one.',
+        because: 'A month of burn either brings Northline or it does not. The SAFE in front of you is the one you can sign.',
         effects: { runway: -1, morale: -4, reputation: 1 },
         flags: { waitedFund: true },
-        next: (current) => (offerScore(current) >= 1 ? 'fund_arrives' : 'fund_nope'),
-        destinations: ['fund_arrives', 'fund_nope'],
+        resolve: (draft) => {
+          if (offerScore(draft) >= 1) draft.flags.fundArrived = true;
+          return draft;
+        },
+        next: 'safe_angel',
       });
     }
   }
@@ -224,7 +291,7 @@ export const SCENES: Scene[] = [
     act: 1,
     title: 'The napkin',
     sprite: 'founder',
-    body: 'Your co-founder taps the napkin. Biscuit is pet insurance that pays. Before anyone quits a job, what are you, legally? Savings cover seven months of rent and noodles.',
+    body: 'Your co-founder taps the napkin. Biscuit is pet insurance that pays. Before anyone quits, what are you, legally? Savings cover seven months of two founders’ salaries.',
     choices: [
       {
         id: 'delaware',
@@ -249,8 +316,8 @@ export const SCENES: Scene[] = [
         label: 'Have a cousin file a Wyoming company tonight.',
         because: 'It feels fast. A lead will still ask for Delaware, and the cleanup lands in diligence.',
         effects: { morale: 6, reputation: -10, runway: -0.2 },
-        flags: { entity: 'wyoming', messyDocs: true, counsel: 'none' },
-        docs: ['coi'],
+        flags: { entity: 'wyoming', messyDocs: true, counsel: 'none', startedAsWyoming: true },
+        docs: ['wyoming-charter'],
         terms: ['pre-seed', 'runway', 'delaware-c-corp', 'qsbs'],
         next: 'founder_stock',
       },
@@ -266,8 +333,8 @@ export const SCENES: Scene[] = [
       {
         id: 'pro',
         label: 'Hire startup counsel and do the full set.',
-        because: 'Counsel costs about a month of noodles. Clean consents are cheaper than a redo during diligence.',
-        effects: { runway: -1, reputation: 8, morale: -4 },
+        because: 'The fee is a few thousand. The month of drafts is the real cost. Clean consents are cheaper than a diligence redo.',
+        effects: { runway: -0.8, reputation: 8, morale: -6 },
         flags: { counsel: 'pro', messyDocs: false },
         docs: CORPORATE,
         next: 'founder_stock',
@@ -434,8 +501,8 @@ export const SCENES: Scene[] = [
       },
       {
         id: 'week',
-        label: 'Give it one more week.',
-        because: 'Seven extra days walk you past day 30. The IRS does not take late 83(b) elections.',
+        label: 'Give it ten more days. The CPA is on vacation.',
+        because: 'Ten days takes you to day 31. The IRS does not take late 83(b) elections.',
         effects: { morale: 2, reputation: -4, advanceDays: 10 },
         next: 'eightyb_missed',
       },
@@ -471,7 +538,7 @@ export const SCENES: Scene[] = [
         id: 'chase',
         label: 'Track Pete down and get the signature.',
         because: 'A month of chasing is cheaper than a diligence surprise. The repo and the paperwork finally match.',
-        effects: { runway: -1, morale: -6, reputation: 6 },
+        effects: { runway: -1.4, morale: -10, reputation: 6 },
         flags: { pete: 'signed' },
         docs: ['founder-ciiaa', 'prior-inventions', 'contractor-ip', 'contractor-agreements'],
         next: (state) => (state.safes.some((safe) => safe.homemade) ? 'deck' : 'pool'),
@@ -528,7 +595,7 @@ export const SCENES: Scene[] = [
       {
         id: 'verbal',
         label: 'Promise an advisor 5% in a chat. Skip the paperwork.',
-        because: 'The advisor is happy. The spreadsheet is now fiction, and fiction shows up in diligence.',
+        because: 'The advisor is happy. Market advisor grants are usually well under 1%. Five percent in a chat will not survive diligence.',
         effects: { morale: 5, reputation: -6 },
         flags: { advisor: 'off-sheet', hired: false },
         next: 'focus',
@@ -546,7 +613,7 @@ export const SCENES: Scene[] = [
         id: 'build',
         label: 'Spend two months with design partners.',
         because: 'Runway drops. The next lead has customers to call, not only a napkin.',
-        effects: { runway: -2, reputation: 8, morale: 3 },
+        effects: { runway: -2.6, reputation: 8, morale: -4 },
         flags: { build: true },
         docs: ['model', 'customer-lois', 'metrics', 'roadmap', 'burn-memo'],
         next: 'targets',
@@ -571,8 +638,8 @@ export const SCENES: Scene[] = [
       {
         id: 'warm',
         label: 'Twenty warm names, tiered.',
-        because: 'Warm intros take patience and raise the odds a partner reads the deck.',
-        effects: { reputation: 5, morale: -2 },
+        because: 'Warm intros take a month and raise the odds a partner reads the deck. Spray is faster and thinner.',
+        effects: { reputation: 5, morale: -2, runway: -1 },
         flags: { list: 'warm' },
         next: 'deck',
       },
@@ -601,8 +668,8 @@ export const SCENES: Scene[] = [
         flags: { deck: 'tight' },
         docs: ['pitch-deck'],
         resolve: (state) => (state.safes.some((safe) => safe.homemade) ? state : rollMeeting(state)),
-        next: (state) => (state.safes.some((safe) => safe.homemade) ? 'time_jump' : meetingDest(state)),
-        destinations: ['time_jump', 'meeting_yes', 'meeting_coffee', 'meeting_ghost'],
+        next: (state) => (state.safes.some((safe) => safe.homemade) ? 'time_jump' : state.flags.meeting === 'yes' ? 'safe_angel' : meetingDest(state)),
+        destinations: ['time_jump', 'safe_angel', 'meeting_coffee', 'meeting_ghost'],
       },
       {
         id: 'bloated',
@@ -612,8 +679,8 @@ export const SCENES: Scene[] = [
         flags: { deck: 'bloated' },
         docs: ['pitch-deck'],
         resolve: (state) => (state.safes.some((safe) => safe.homemade) ? state : rollMeeting(state)),
-        next: (state) => (state.safes.some((safe) => safe.homemade) ? 'time_jump' : meetingDest(state)),
-        destinations: ['time_jump', 'meeting_yes', 'meeting_coffee', 'meeting_ghost'],
+        next: (state) => (state.safes.some((safe) => safe.homemade) ? 'time_jump' : state.flags.meeting === 'yes' ? 'safe_angel' : meetingDest(state)),
+        destinations: ['time_jump', 'safe_angel', 'meeting_coffee', 'meeting_ghost'],
       },
     ],
   },
@@ -674,9 +741,16 @@ export const SCENES: Scene[] = [
     choices: [
       {
         id: 'onward',
-        label: 'Back to people who write checks.',
-        because: 'You spent the calendar slot. The next hour has to be a SAFE or a better meeting.',
-        effects: { morale: -1, reputation: 1 },
+        label: 'Send the deck again and get back to the list.',
+        because: 'You spent the calendar slot. A second note keeps the intro alive if there was one.',
+        effects: { morale: -2, reputation: 2 },
+        next: 'safe_angel',
+      },
+      {
+        id: 'leave',
+        label: 'Leave it there.',
+        because: 'You protect the rest of the day. A coffee that went nowhere stays nowhere.',
+        effects: { morale: 2, reputation: -1 },
         next: 'safe_angel',
       },
     ],
@@ -758,11 +832,24 @@ export const SCENES: Scene[] = [
     body: 'Read the stack from the top. A post-money SAFE percent is the check divided by its cap. A later SAFE does not move an earlier SAFE. It moves the founders.',
     choices: [
       {
-        id: 'onward',
-        label: 'Write the percents down and send signature requests.',
-        because: 'The stack is only real if the PDFs match it. Requests go out the same day.',
-        effects: { reputation: 2, morale: -1 },
-        next: 'form_d',
+        id: 'send',
+        label: 'Send the signature requests today.',
+        because: 'Speed keeps the round moving. A side letter in the PDF stays in the PDF.',
+        effects: { reputation: 1, morale: -1 },
+        next: 'cap_table',
+      },
+      {
+        id: 'recheck',
+        label: 'Re-read the PDFs before anyone signs.',
+        because: 'One day now can catch a side letter. That letter is not part of the standard SAFE.',
+        effects: { advanceDays: 1, morale: -2, reputation: 2 },
+        resolve: (draft) => {
+          if (draft.safes.some((safe) => safe.sideLetter)) {
+            draft.safes = draft.safes.map((safe) => ({ ...safe, sideLetter: false }));
+          }
+          return draft;
+        },
+        next: 'cap_table',
       },
     ],
   },
@@ -781,16 +868,16 @@ export const SCENES: Scene[] = [
         because: 'A notice on time is boring. Boring is the goal. The wire is a separate problem.',
         effects: { reputation: 4, runway: -0.2, advanceDays: 2, fileFormD: true },
         docs: ['form-d'],
-        next: (state) => (state.safes.some((safe) => safe.homemade) ? 'contractor' : 'cap_table'),
-        destinations: ['contractor', 'cap_table'],
+        next: (state) => (state.history.some((item) => item.scene === 'signatures') ? 'preseed_wire' : 'contractor'),
+        destinations: ['preseed_wire', 'contractor'],
       },
       {
         id: 'delay',
         label: 'Let the portal wait.',
         because: 'You slip past day 15. States and diligence lawyers notice late notices.',
         effects: { morale: 2, reputation: -4, advanceDays: 18, forceMissFormD: true },
-        next: (state) => (state.safes.some((safe) => safe.homemade) ? 'contractor' : 'cap_table'),
-        destinations: ['contractor', 'cap_table'],
+        next: (state) => (state.history.some((item) => item.scene === 'signatures') ? 'preseed_wire' : 'contractor'),
+        destinations: ['preseed_wire', 'contractor'],
       },
     ],
   },
@@ -867,15 +954,15 @@ export const SCENES: Scene[] = [
         id: 'nudge',
         label: 'Nudge every signer today.',
         because: 'Nagging is part of closing. Signed pages are how a SAFE becomes a wire.',
-        effects: { morale: -3, reputation: 3, runway: -0.2 },
-        next: 'preseed_wire',
+        effects: { morale: -3, reputation: 3, runway: -0.2, noteFirstSale: true },
+        next: 'form_d',
       },
       {
         id: 'wait',
         label: 'Wait for them to notice the email.',
         because: 'Silence feels polite. Weeks of it are burn, and payroll does not ghost you back.',
-        effects: { runway: -0.8, morale: -4 },
-        next: 'preseed_wire',
+        effects: { runway: -0.8, morale: -4, noteFirstSale: true },
+        next: 'form_d',
       },
     ],
   },
@@ -885,34 +972,53 @@ export const SCENES: Scene[] = [
     title: 'Pre-seed wire',
     sprite: 'bank',
     tone: 'win',
-    body: 'The SAFEs are signed. The wire hits the company account. Update the cap table the same day, while the number still matches the PDF.',
+    body: 'The SAFEs are signed. An email arrives with “updated wire instructions” from a lookalike domain. The number you already have is the one to call.',
     choices: [
       {
-        id: 'bank',
-        label: 'Book the cash and update the sheet.',
-        because: 'Runway jumps by the SAFE cash divided by monthly burn. A signature was not cash until this moment.',
-        effects: { bankNewSafes: true, morale: 4, reputation: 2 },
+        id: 'phone',
+        label: 'Call the number you already have, then book the wire.',
+        because: 'Runway jumps by the SAFE cash divided by burn. A new email is not a new bank.',
+        effects: { bankNewSafes: true, morale: 3, reputation: 2 },
         next: 'time_jump',
+      },
+      {
+        id: 'email',
+        label: 'Use the wire instructions in the new email.',
+        because: 'The lookalike domain was not your bank. The transfer bounces and a month of nerves goes with it.',
+        effects: { runway: -1.2, morale: -8, reputation: -4 },
+        flags: { wireFraud: true },
+        next: 'preseed_wire',
       },
     ],
   },
   {
     id: 'time_jump',
     act: 1,
-    title: 'Ten months later',
+    title: 'The first quarter',
     sprite: 'founder',
     termsOnEnter: ['burn-rate', 'seed-round'],
-    body: 'Ten months pass. You ship, you hire, you learn what burn means. A seed fund named Kindling replies. A reply is not a term sheet.',
-    choices: [
-      {
-        id: 'open',
-        label: 'Open Kindling’s reply.',
-        because: 'Ten months of burn come off the runway. You only read the email if the company is still alive.',
-        effects: { runway: -BALANCE.timeJumpMonths, morale: -2, reputation: 1 },
-        next: routeAfterTimeJump,
-        destinations: ['ending', 'seed_llc_wall', 'lead_hunt'],
-      },
-    ],
+    body: (state) =>
+      `You have ${state.runway.toFixed(1)} months. Full burn for three quarters will not fit if that number is thin. ${state.flags.hired ? 'Payroll includes the new hire.' : 'You have not hired yet.'}`,
+    choices: burnBeat('burn_2'),
+  },
+  {
+    id: 'burn_2',
+    act: 1,
+    title: 'The second quarter',
+    sprite: 'founder',
+    body: (state) =>
+      state.flags.churnHit
+        ? 'A design partner pauses. Covering them costs cash. Ignoring them costs the reference you hoped to use.'
+        : 'The second quarter. Burn is still a choice. Uncut, this is how a company misses the seed meeting.',
+    choices: (state) => burnBeat('burn_3', state.flags.churnHit),
+  },
+  {
+    id: 'burn_3',
+    act: 1,
+    title: 'The third quarter',
+    sprite: 'investor',
+    body: 'Kindling’s name is in the inbox. You only open it if the company is still solvent. This quarter is the last one before that reply.',
+    choices: burnBeat('after-burn'),
   },
   {
     id: 'seed_llc_wall',
@@ -927,7 +1033,7 @@ export const SCENES: Scene[] = [
         id: 'convert',
         label: 'Reincorporate to Delaware before the process.',
         because: 'You pay for the conversion you postponed. The new stock starts a new 83(b) clock.',
-        effects: { runway: -2, reputation: 4, morale: -5 },
+        effects: { runway: -1.2, reputation: 4, morale: -5 },
         flags: { entity: 'delaware', messyDocs: false },
         docs: CORPORATE,
         next: 'rushed_83b',
@@ -985,7 +1091,7 @@ export const SCENES: Scene[] = [
         effects: { runway: -0.5, reputation: 4, morale: -2 },
         flags: { fastSheet: false },
         next: routeToTermSheet,
-        destinations: ['seed_llc_wall', 'retrovest', 'term_headline'],
+        destinations: ['seed_llc_wall', 'retrovest', 'pool_shuffle', 'lead_walks'],
       },
       {
         id: 'fast',
@@ -994,7 +1100,7 @@ export const SCENES: Scene[] = [
         effects: { morale: 4, reputation: -5, runway: -0.2 },
         flags: { fastSheet: true },
         next: routeToTermSheet,
-        destinations: ['seed_llc_wall', 'retrovest', 'term_headline'],
+        destinations: ['seed_llc_wall', 'retrovest', 'pool_shuffle', 'lead_walks'],
       },
       {
         id: 'party',
@@ -1021,14 +1127,14 @@ export const SCENES: Scene[] = [
         effects: { runway: -0.6, morale: -5, reputation: 4, issueStock: true, file83b: true },
         flags: { vesting: 'standard' },
         docs: ['eighty-three-b'],
-        next: 'term_headline',
+        next: 'pool_shuffle',
       },
       {
         id: 'refuse',
         label: 'Refuse vesting and live with a smaller check.',
         because: 'You keep the shares unrestricted. Kindling prices that risk into a smaller round.',
         effects: { morale: 3, reputation: -8 },
-        next: 'term_headline',
+        next: 'pool_shuffle',
       },
     ],
   },
@@ -1037,9 +1143,12 @@ export const SCENES: Scene[] = [
     act: 2,
     title: 'No lead',
     sprite: 'coffee',
-    body: 'No one is setting terms. Angels will do another post-money SAFE. That can be a bridge. Stacking it dilutes founders, not the SAFEs you already signed.',
-    choices: [
-      bridgeChoice(),
+    body: (state) =>
+      state.flags.entity === 'llc'
+        ? 'No one is setting terms. Angels will wire a bridge note. A SAFE is for a corporation. This paper will need a redo if you convert.'
+        : 'No one is setting terms. Angels will do another post-money SAFE. Stacking it dilutes founders, not the SAFEs you already signed.',
+    choices: (state) => [
+      bridgeChoice(state.flags.entity === 'llc'),
       {
         id: 'month',
         label: 'Hunt one more month for a lead.',
@@ -1063,7 +1172,14 @@ export const SCENES: Scene[] = [
         because: 'You spent the month. Walking into the only lead you have is the point of the wait.',
         effects: { reputation: 2, morale: 3 },
         next: routeToTermSheet,
-        destinations: ['retrovest', 'term_headline', 'seed_llc_wall'],
+        destinations: ['retrovest', 'pool_shuffle', 'seed_llc_wall', 'lead_walks'],
+      },
+      {
+        id: 'pass',
+        label: 'Thank them and take a bridge instead.',
+        because: 'You skip the markup. The bridge is real money and it is not a priced round.',
+        effects: { morale: -2, reputation: -3 },
+        next: 'party_final',
       },
     ],
   },
@@ -1073,8 +1189,11 @@ export const SCENES: Scene[] = [
     title: 'Bridge or stop',
     sprite: 'bank',
     tone: 'consequence',
-    body: 'There is still no lead. The angels will wire a bridge SAFE. That ending keeps the company alive and stacks more dilution on the founders.',
-    choices: [bridgeChoice()],
+    body: (state) =>
+      state.flags.entity === 'llc'
+        ? 'There is still no lead, and you are still an LLC. A bridge note can wire. It is not a priced seed.'
+        : 'There is still no lead. A bridge SAFE keeps the company alive and stacks more dilution on the founders.',
+    choices: (state) => [bridgeChoice(state.flags.entity === 'llc')],
   },
   {
     id: 'term_headline',
@@ -1101,7 +1220,7 @@ export const SCENES: Scene[] = [
     sprite: 'sheet',
     kind: 'shuffle',
     termsOnEnter: ['option-pool-shuffle', 'effective-pre-money'],
-    body: 'The option pool is added before the new money, so it comes out of the pre-money. Headline pre-money is not what the founders keep. Watch effective pre-money and your percent move.',
+    body: 'Pre-money is before their check. Post-money adds it. The pool is added before the new money, so the top-up dilutes founders and SAFE holders. Watch the numbers.',
     choices: shuffleChoices,
   },
   {
@@ -1179,7 +1298,7 @@ export const SCENES: Scene[] = [
     title: 'SAFEs convert',
     sprite: 'sheet',
     kind: 'conversion',
-    body: 'The SAFEs convert in this round. Each one keeps purchase amount divided by its cap, then the new money dilutes everyone, including those SAFE holders. The pool still comes out of the founders.',
+    body: 'Each cap SAFE starts at check divided by cap. Then the new money and the pool top-up dilute everyone already on the cap table, SAFE holders included.',
     choices: (state) => {
       if (state.safes.some((safe) => safe.sideLetter)) {
         return [
@@ -1227,7 +1346,12 @@ export const SCENES: Scene[] = [
         label: 'Spend two weeks filling the ordinary folders.',
         because: 'A fuller room answers boring questions. It does not repair a missed election or an unsigned contractor.',
         effects: { runway: -0.5, morale: -4, reputation: 4 },
-        docs: PREPARABLE_DOC_IDS,
+        resolve: (draft) => {
+          for (const id of preparableFor(draft)) {
+            if (!draft.docs.includes(id)) draft.docs.push(id);
+          }
+          return draft;
+        },
         next: (state) => nextDiligence('diligence_intro', state),
         destinations: after('diligence_intro'),
       },
@@ -1300,7 +1424,7 @@ export const SCENES: Scene[] = [
         label: 'Reserve the cash and disclose the miss.',
         because: 'You cannot backdate an 83(b). The reserve is runway leaving before you ever see that value.',
         effects: { runway: -1.5, morale: -8, reputation: -3 },
-        docs: ['tax-note'],
+        docs: ['83b-memo'],
         next: (state) => nextDiligence('diligence_83b', state),
         destinations: after('diligence_83b'),
       },
@@ -1512,6 +1636,59 @@ export const SCENES: Scene[] = [
     termsOnEnter: ['wire'],
     body: 'The wire moves when the blocking pages are signed, not when someone says they are excited. Form D is a 15-day notice after the sale. It does not release the money.',
     choices: [],
+  },
+  {
+    id: 'cofounder_wobble',
+    act: 1,
+    title: 'The co-founder',
+    sprite: 'founder',
+    tone: 'consequence',
+    kicker: 'Morale',
+    body: 'Morale is thin. Your co-founder says they may leave. Vesting decides whether their unvested shares come home or walk out the door.',
+    choices: [
+      {
+        id: 'stay',
+        label: 'Ask them to stay. Take a week to reset.',
+        because: 'You spend a little runway and get the person back. The cliff does not have to be used.',
+        effects: { runway: -0.4, morale: 12, reputation: 1 },
+        next: (state) => state.flags.resumeScene || 'lead_hunt',
+        destinations: ['lead_hunt', 'pool_shuffle', 'burn_2', 'burn_3', 'time_jump', 'safe_angel', 'cap_table', 'form_d', 'preseed_wire', 'diligence_intro', 'wire_day', 'ending', 'counsel', 'founder_stock', 'contractor', 'focus', 'targets', 'deck', 'signatures', 'seed_llc_wall', 'rushed_83b', 'retrovest', 'conversion', 'redpen', 'nvca_spa'],
+      },
+      {
+        id: 'cliff',
+        label: 'Let them go and follow the vesting.',
+        because: 'With vesting, unvested shares return to the company. Without it, they leave holding half.',
+        effects: { morale: -4, reputation: 2, runway: -0.3 },
+        resolve: (draft) => {
+          const half = Math.floor(draft.foundersShares / 2);
+          draft.foundersShares -= half;
+          if (draft.flags.vesting === 'standard') draft.poolShares += half;
+          else draft.departedShares += half;
+          return draft;
+        },
+        next: (state) => state.flags.resumeScene || 'lead_hunt',
+        destinations: ['lead_hunt', 'pool_shuffle', 'burn_2', 'burn_3', 'time_jump', 'safe_angel', 'cap_table', 'form_d', 'preseed_wire', 'diligence_intro', 'wire_day', 'ending', 'counsel', 'founder_stock', 'contractor', 'focus', 'targets', 'deck', 'signatures', 'seed_llc_wall', 'rushed_83b', 'retrovest', 'conversion', 'redpen', 'nvca_spa'],
+      },
+    ],
+  },
+  {
+    id: 'week_off',
+    act: 1,
+    title: 'A week off',
+    sprite: 'coffee',
+    tone: 'consequence',
+    kicker: 'Morale',
+    body: 'Morale is too low to take another meeting. You close the laptop for a week. The company pays for the quiet.',
+    choices: [
+      {
+        id: 'rest',
+        label: 'Take the week.',
+        because: 'A quarter-month of runway buys enough energy to keep choosing on purpose.',
+        effects: { runway: -0.25, morale: 14 },
+        next: (state) => state.flags.resumeScene || 'lead_hunt',
+        destinations: ['lead_hunt', 'pool_shuffle', 'burn_2', 'burn_3', 'time_jump', 'safe_angel', 'cap_table', 'form_d', 'preseed_wire', 'diligence_intro', 'wire_day', 'ending', 'counsel', 'founder_stock', 'contractor', 'focus', 'targets', 'deck', 'signatures', 'seed_llc_wall', 'rushed_83b', 'retrovest', 'conversion', 'redpen', 'nvca_spa', 'cofounder_wobble'],
+      },
+    ],
   },
   {
     id: 'ending',

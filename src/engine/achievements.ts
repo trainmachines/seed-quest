@@ -27,7 +27,9 @@ export const ACHIEVEMENTS: Achievement[] = [
 export function earnedAchievements(state: GameState): string[] {
   const ids: string[] = [];
   const kind = state.sceneId === 'ending' ? endingKind(state) : null;
-  if (state.flags.entity === 'delaware' && state.docs.includes('bylaws')) ids.push('delaware');
+  if (state.history.some((item) => item.scene === 'napkin' && item.choice === 'delaware') && state.docs.includes('bylaws')) {
+    ids.push('delaware');
+  }
   if (state.filed83b && !state.missed83b) ids.push('clockwatcher');
   if (state.flags.pete === 'signed' || state.flags.pete === 'rewrite') ids.push('ghostbuster');
   if (state.docs.includes('cap-table') && state.flags.advisor !== 'off-sheet' && !state.flags.sloppySheet && state.history.some((item) => item.choice === 'fix')) {

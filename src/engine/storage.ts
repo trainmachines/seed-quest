@@ -1,3 +1,4 @@
+import { sceneMap } from '../data/scenes';
 import type { GameState } from './types';
 
 /**
@@ -98,6 +99,7 @@ function parseState(raw: string): GameState | null {
     if (!value || value.version !== 1 || typeof value.slotId !== 'string' || typeof value.sceneId !== 'string') {
       return null;
     }
+    if (!sceneMap.has(value.sceneId)) return null;
     return value;
   } catch {
     return null;

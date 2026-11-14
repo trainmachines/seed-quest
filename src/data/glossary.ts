@@ -229,7 +229,7 @@ export const GLOSSARY: GlossaryEntry[] = [
     term: 'Post-money valuation',
     definition: 'Pre-money plus the new money in the priced round. New investors own new money divided by this post-money.',
     why: 'Do not mix it up with a post-money SAFE cap. The cap is about the SAFE. This number is about the priced round.',
-    example: '$12M pre + $2.5M new = $14.5M post. The lead owns 2.5 / 14.5 of the company, before considering only the pool’s placement.',
+    example: '$12M pre + $2.5M new = $14.5M post. The lead owns 2.5 / 14.5. The pool does not change that percent. It changes what the founders and SAFE holders keep.',
   },
   {
     id: 'option-pool-shuffle',
@@ -381,7 +381,7 @@ export const GLOSSARY: GlossaryEntry[] = [
   {
     id: 'rofr',
     term: 'Right of first refusal',
-    definition: 'The company’s right to buy a founder’s shares on the same terms before those shares are sold to an outsider.',
+    definition: 'The company’s right to buy a founder’s shares first, and then the major investors’ right to buy what the company does not take, before an outsider can.',
     why: 'It stops a quiet secondary sale. It lives in the ROFR and Co-Sale Agreement.',
     example: 'You want to sell 1% to a friend. The company can step in and buy that 1% on the same terms instead.',
   },

@@ -40,6 +40,14 @@ export interface Flags {
   foughtStandard: boolean;
   skimCount: number;
   ipIndemnity: boolean;
+  startedAsWyoming: boolean;
+  cofounderWobble: boolean;
+  weekOff: boolean;
+  wireFraud: boolean;
+  churnSeen: boolean;
+  churnHit: boolean;
+  resumeScene: string;
+  runwayBeforeWire: number | null;
 }
 
 export interface Deal {
@@ -52,6 +60,7 @@ export interface Deal {
   antidilution: 'unset' | 'bbwa' | 'full-ratchet';
   board: 'unset' | 'balanced' | 'investor-control';
   protective: 'unset' | 'standard' | 'hire-veto';
+  clauseIds: string[] | null;
   closed: boolean;
   bridge: boolean;
 }
@@ -64,6 +73,8 @@ export interface SafeNote {
   mfn: boolean;
   sideLetter: boolean;
   homemade: boolean;
+  /** 0.2 means a 20% discount. 0 means no discount. */
+  discount?: number;
   order: number;
 }
 
@@ -144,6 +155,7 @@ export interface GameState {
   foundersShares: number;
   grantedShares: number;
   poolShares: number;
+  departedShares: number;
   unbanked: number;
   flags: Flags;
   deal: Deal;
@@ -187,6 +199,14 @@ export function defaultFlags(): Flags {
     foughtStandard: false,
     skimCount: 0,
     ipIndemnity: false,
+    startedAsWyoming: false,
+    cofounderWobble: false,
+    weekOff: false,
+    wireFraud: false,
+    churnSeen: false,
+    churnHit: false,
+    resumeScene: '',
+    runwayBeforeWire: null,
   };
 }
 
@@ -201,6 +221,7 @@ export function defaultDeal(): Deal {
     antidilution: 'unset',
     board: 'unset',
     protective: 'unset',
+    clauseIds: null,
     closed: false,
     bridge: false,
   };

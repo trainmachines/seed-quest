@@ -56,8 +56,10 @@ Do not hard-code diluted percentages in scene copy. `src/engine/math.ts` is the 
 
 - Post-money SAFE ownership = purchase amount ÷ post-money cap.
 - A later post-money SAFE dilutes founders, not earlier SAFE holders.
+- In the priced round, the option-pool increase dilutes SAFE holders and founders. New investors are not diluted by that pool.
+- If the pre-money is below a SAFE cap, the SAFE converts at the round price (the cap is a ceiling).
 - Priced-round post-money = pre-money + new money.
-- The option pool is carved out of the pre-money. Effective pre-money = headline pre-money − (pool % × post-money).
+- Effective pre-money = headline pre-money − (pool % × post-money).
 
 ## Add a data room document
 

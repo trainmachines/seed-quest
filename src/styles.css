@@ -135,7 +135,75 @@ footer { border-bottom: 0; border-top: 3px solid var(--line); }
 .tone-consequence { border-color: var(--red); }
 .tone-win { border-color: var(--green); }
 .choices { list-style: none; padding: 0; display: grid; gap: 0.6rem; }
-.choice { width: 100%; display: flex; gap: 0.7rem; align-items: flex-start; font-size: 1.05rem; }
+.choice {
+  width: 100%;
+  display: flex;
+  gap: 0.7rem;
+  align-items: flex-start;
+  font-size: 1.05rem;
+  background: #3c2e24;
+  border: 3px solid var(--line);
+  box-shadow: var(--shadow);
+  padding: 0.7rem 0.9rem;
+  cursor: pointer;
+  text-align: left;
+}
+.choice:hover { transform: translate(-1px, -1px); }
+.choice:focus-visible { outline: 3px solid var(--blue); outline-offset: 3px; }
+button.acronym {
+  display: inline;
+  position: relative;
+  width: auto;
+  background: transparent;
+  border: 0;
+  border-bottom: 2px dotted var(--amber);
+  box-shadow: none;
+  padding: 0;
+  margin: 0;
+  color: var(--amber);
+  font-weight: 700;
+  line-height: inherit;
+  cursor: help;
+  vertical-align: baseline;
+  text-align: left;
+}
+button.acronym:hover { transform: none; }
+button.acronym:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.acronym-exp { font-weight: 400; }
+.acronym-tip {
+  position: absolute;
+  z-index: 4;
+  left: 0;
+  top: 100%;
+  width: min(18rem, 72vw);
+  background: #140f0c;
+  color: var(--ink);
+  border: 3px solid var(--line);
+  box-shadow: var(--shadow);
+  padding: 0.55rem 0.65rem;
+  font-family: var(--body);
+  font-weight: 400;
+  font-size: 0.95rem;
+  line-height: 1.35;
+  text-align: left;
+  white-space: normal;
+}
+.acronym-tip strong {
+  display: block;
+  font-family: var(--pixel);
+  font-size: 0.7rem;
+  font-weight: 400;
+  color: var(--amber);
+  margin-bottom: 0.35rem;
+}
+.folders .tab {
+  background: #3c2e24;
+  border: 3px solid var(--line);
+  box-shadow: var(--shadow);
+  padding: 0.7rem 0.9rem;
+  cursor: pointer;
+}
+.folders .tab.on { border-color: var(--green); }
 .num {
   flex: 0 0 auto;
   background: var(--amber);
@@ -238,6 +306,15 @@ input:not([type='checkbox']) {
   .cap-more:not([open]) .cap-rows,
   .cap-more:not([open]) .effective { display: none; }
   .cap-panel { padding: 0.45rem 0.6rem; }
+  .acronym-tip {
+    position: fixed;
+    left: 0.6rem;
+    right: 0.6rem;
+    bottom: 0.6rem;
+    top: auto;
+    width: auto;
+  }
+  .choice:hover { transform: none; }
 }
 .cap-more summary { display: none; }
 @media (prefers-reduced-motion: reduce) {

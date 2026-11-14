@@ -96,7 +96,9 @@ describe('story content', () => {
       unlocked.add(term);
     }
     for (const path of UNTAKEN_PATHS) unlocked.add(path.glossaryId);
-    const missing = GLOSSARY.map((entry) => entry.id).filter((id) => !unlocked.has(id));
+    const missing = GLOSSARY.filter((entry) => !entry.reference)
+      .map((entry) => entry.id)
+      .filter((id) => !unlocked.has(id));
     expect(missing).toEqual([]);
   });
 });

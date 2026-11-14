@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { sheetClauses } from '../data/clauses';
 import { computeCapTable, describeShuffle, money, pct, previewPricedRound } from '../engine/math';
 import type { Choice, GameState } from '../engine/types';
+import { AcronymText } from './AcronymText';
 
 export function StackReveal({ state }: { state: GameState }) {
   const full = computeCapTable(state);
@@ -10,9 +11,11 @@ export function StackReveal({ state }: { state: GameState }) {
     return (
       <div className="mechanic">
         <p className="formula">
-          {only ? `${only.name}: ${money(only.amount)} ÷ ${money(only.cap)} = ${pct(only.pctPreRound)}` : 'No SAFE signed yet.'}
+          <AcronymText text={only ? `${only.name}: ${money(only.amount)} ÷ ${money(only.cap)} = ${pct(only.pctPreRound)}` : 'No SAFE signed yet.'} />
         </p>
-        <p>A second post-money SAFE would leave that percent where it is and move the founders.</p>
+        <p>
+          <AcronymText text="A second post-money SAFE would leave that percent where it is and move the founders." />
+        </p>
       </div>
     );
   }
@@ -29,10 +32,14 @@ export function StackReveal({ state }: { state: GameState }) {
         <Column title="After it stacks" table={full} mark={same && Math.abs(same.pctPreRound - first.pctPreRound) < 1e-9 ? first.id : undefined} />
       </div>
       {same && Math.abs(same.pctPreRound - first.pctPreRound) < 1e-9 && (
-        <p className="formula">{first.name} stays at {pct(first.pctPreRound)}. Founders absorb the new SAFE.</p>
+        <p className="formula">
+          <AcronymText text={`${first.name} stays at ${pct(first.pctPreRound)}. Founders absorb the new SAFE.`} />
+        </p>
       )}
       {same && Math.abs(same.pctPreRound - first.pctPreRound) >= 1e-9 && (
-        <p className="formula">{first.name} moved to {pct(same.pctPreRound)} because MFN copied a cheaper cap. That is not ordinary stacking.</p>
+        <p className="formula">
+          <AcronymText text={`${first.name} moved to ${pct(same.pctPreRound)} because MFN copied a cheaper cap. That is not ordinary stacking.`} />
+        </p>
       )}
     </div>
   );
@@ -41,7 +48,9 @@ export function StackReveal({ state }: { state: GameState }) {
 function Column({ title, table, mark }: { title: string; table: ReturnType<typeof computeCapTable>; mark?: string }) {
   return (
     <div>
-      <h3>{title}</h3>
+      <h3>
+        <AcronymText text={title} expand={false} />
+      </h3>
       <ul className="cap-rows">
         <li>
           <span>Founders</span>
@@ -94,7 +103,9 @@ export function ShufflePreview({ state, choices, focusId }: { state: GameState; 
         </div>
       </dl>
       <p className="formula">
-        New investors own {pct(shuffle.newPct)} either way. They are not diluted by the pool. {money(shuffle.effectivePre)} = {money(pre)} − ({pct(pool, 0)} × {money(shuffle.post)}).
+        <AcronymText
+          text={`New investors own ${pct(shuffle.newPct)} either way. They are not diluted by the pool. ${money(shuffle.effectivePre)} = ${money(pre)} − (${pct(pool, 0)} × ${money(shuffle.post)}).`}
+        />
       </p>
     </div>
   );
@@ -120,8 +131,12 @@ export function RedPen({ state, onSubmit }: { state: GameState; onSubmit: (ids: 
             <label>
               <input type="checkbox" checked={marked.includes(clause.id)} onChange={() => toggle(clause.id)} />
               <span>
-                <strong>{clause.title}</strong>
-                <span>{clause.text}</span>
+                <strong>
+                  <AcronymText text={clause.title} expand={false} />
+                </strong>
+                <span>
+                  <AcronymText text={clause.text} />
+                </span>
               </span>
             </label>
           </li>
@@ -145,8 +160,12 @@ export function RedPenResult({ state }: { state: GameState }) {
         const good = clause.scary ? on : !on;
         return (
           <li key={clause.id} className={good ? 'result-good' : 'result-cost'}>
-            <strong>{on ? 'Marked' : 'Left in'}: {clause.title}</strong>
-            <span>{clause.scary ? clause.whyScary : clause.whyNormal}</span>
+                <strong>
+                  <AcronymText text={`${on ? 'Marked' : 'Left in'}: ${clause.title}`} expand={false} />
+                </strong>
+                <span>
+                  <AcronymText text={clause.scary ? clause.whyScary ?? '' : clause.whyNormal ?? ''} />
+                </span>
           </li>
         );
       })}
@@ -264,8 +283,14 @@ export function WireChecklist({
             <label>
               <input type="checkbox" checked={checked.includes(item.id)} onChange={() => toggle(item.id)} />
               <span>
-                <strong>{item.label}</strong>
-                {item.hint && <span>{item.hint}</span>}
+                <strong>
+                  <AcronymText text={item.label} />
+                </strong>
+                {item.hint && (
+                  <span>
+                    <AcronymText text={item.hint} />
+                  </span>
+                )}
                 {item.decoy && <span>Do not treat this as a closing item.</span>}
                 {!item.blocking && !item.decoy && <span>Does not hold the wire.</span>}
               </span>
@@ -305,16 +330,18 @@ export function ConversionMath({ state }: { state: GameState }) {
         {preview.safeDetails.map((safe) => (
           <li key={safe.id}>
             <span>
-              {safe.name} {money(safe.amount)} ÷ {money(safe.cap)} = {pct(safe.pctPreRound)} before the new money
-              {preview.stage === 'post-round' ? `, then ${pct(safe.pctNow)} after it` : ''}
-              {safe.homemade ? ' · this paper still needs a redo' : ''}
+              <AcronymText
+                text={`${safe.name} ${money(safe.amount)} ÷ ${money(safe.cap)} = ${pct(safe.pctPreRound)} before the new money${preview.stage === 'post-round' ? `, then ${pct(safe.pctNow)} after it` : ''}${safe.homemade ? ' · this paper still needs a redo' : ''}`}
+              />
             </span>
           </li>
         ))}
       </ul>
       {preview.effectivePre != null && preview.headlinePre != null && (
         <p className="formula">
-          Headline pre-money {money(preview.headlinePre)}. Effective pre-money {money(preview.effectivePre)} after the pool. New investors own {pct(preview.newMoneyPct)}.
+          <AcronymText
+            text={`Headline pre-money ${money(preview.headlinePre)}. Effective pre-money ${money(preview.effectivePre)} after the pool. New investors own ${pct(preview.newMoneyPct)}.`}
+          />
         </p>
       )}
     </div>

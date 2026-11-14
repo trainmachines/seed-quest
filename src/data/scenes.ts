@@ -890,7 +890,7 @@ export const SCENES: Scene[] = [
     body: (state) =>
       state.flags.advisor === 'off-sheet'
         ? 'The sheet shows 100%, and a chat still promises an advisor 5%. Both cannot be true. Post-money SAFEs will not be the ones who absorb a late fix.'
-        : 'Add a SUM row. Fully diluted ownership has to land on 100%, including the pool and every SAFE.',
+        : 'Add a total row. Fully diluted ownership has to land on 100%, including the pool and every SAFE.',
     choices: (state) => {
       if (state.flags.advisor === 'off-sheet') {
         return [

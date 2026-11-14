@@ -67,7 +67,9 @@ Add an entry to `DOCUMENTS` in `src/data/documents.ts` with the folder, round, w
 
 ## Add a glossary term
 
-Add an entry to `GLOSSARY` in `src/data/glossary.ts` with a plain definition, why it matters, and an example. Unlock it from a scene or choice, or from a “road not taken” in `src/data/paths.ts`. A term that is never unlocked fails the content test.
+Add an entry to `GLOSSARY` in `src/data/glossary.ts` with a plain definition, why it matters, and an example. Unlock it from a scene or choice, or from a “road not taken” in `src/data/paths.ts`. A story term that is never unlocked fails the content test.
+
+Acronyms live in `src/data/acronyms.ts`. Each one has the expansion, a one-line meaning, and why a founder cares. Story text and data room documents spell a term out the first time it appears in that scene or document, and every acronym can be hovered, focused, or tapped for the same definition. `npm test` scans content for uppercase tokens of two or more letters and fails if a new one is missing from that list or the allowlist.
 
 ## Deploy
 

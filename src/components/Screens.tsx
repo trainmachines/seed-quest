@@ -9,9 +9,11 @@ import type { GameState } from '../engine/types';
 import { DOCUMENTS, FOLDERS } from '../data/documents';
 import { GLOSSARY, glossaryMap } from '../data/glossary';
 import { untakenPaths } from '../data/paths';
+import { ACRONYMS } from '../data/acronyms';
 import { CapTablePanel, DeltaBanner, Disclaimer, LootModal, Meters } from './Chrome';
 import { ConversionMath, RedPen, RedPenResult, ShufflePreview, StackReveal, WireChecklist } from './Mechanics';
 import { Sprite } from './Sprites';
+import { AcronymScope, AcronymText } from './AcronymText';
 
 export function TitleScreen({
   saves,
@@ -31,7 +33,7 @@ export function TitleScreen({
       <p className="subtitle">From Napkin to Wire</p>
       <Sprite id="founder" />
       <p className="lede">
-        Four meters. Real documents. A pre-seed, then a priced seed. Choices move the numbers, and a few of them come due in diligence.
+        <AcronymText text="Four meters. Real documents. A pre-seed, then a priced seed. Choices move the numbers, and a few of them come due in diligence." />
       </p>
       <ol className="slots">
         {SLOT_IDS.map((slotId, index) => {
@@ -101,25 +103,28 @@ export function PlayScreen({
     setFocusId(null);
   }, [state.eventId]);
   const showLoot = state.pendingLoot.length > 0 && state.sceneId !== 'ending';
+  const kicker = `Act ${scene.act} · ${scene.act === 1 ? 'Pre-seed' : 'Seed'}${scene.kicker ? ` · ${scene.kicker}` : ''}`;
   return (
     <div className="play">
       <div className="play-top">
         <Meters state={state} />
         <CapTablePanel state={state} highlight={state.sceneId === 'safe_result' || state.sceneId === 'pool_shuffle'} />
       </div>
+      <AcronymScope>
       <article className={`story tone-${scene.tone ?? 'neutral'}`} aria-labelledby="scene-title">
         <p className="kicker">
-          Act {scene.act} · {scene.act === 1 ? 'Pre-seed' : 'Seed'}
-          {scene.kicker ? ` · ${scene.kicker}` : ''}
+          <AcronymText text={kicker} expand={false} />
         </p>
         <div className="story-head">
           <Sprite id={scene.sprite} />
           <h1 id="scene-title" tabIndex={-1}>
-            {scene.title}
+            <AcronymText text={scene.title} expand={false} />
           </h1>
         </div>
         {state.lastDelta && !showLoot && <DeltaBanner delta={state.lastDelta} />}
-        <p className="body-copy">{sceneBody(scene, state)}</p>
+        <p className="body-copy">
+          <AcronymText text={sceneBody(scene, state)} />
+        </p>
         {scene.kind === 'stack' && <StackReveal state={state} />}
         {scene.kind === 'shuffle' && <ShufflePreview state={state} choices={choices} focusId={focusId} />}
         {scene.kind === 'conversion' && <ConversionMath state={state} />}
@@ -132,21 +137,32 @@ export function PlayScreen({
           <ol className="choices">
             {choices.map((choice, index) => (
               <li key={choice.id}>
-                <button
-                  type="button"
+                <div
                   className="choice"
+                  role="button"
+                  tabIndex={0}
                   onClick={() => onChoose(choice.id)}
                   onFocus={() => setFocusId(choice.id)}
                   onMouseEnter={() => setFocusId(choice.id)}
+                  onKeyDown={(event) => {
+                    if (event.target !== event.currentTarget) return;
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault();
+                      onChoose(choice.id);
+                    }
+                  }}
                 >
                   <span className="num">{index + 1}</span>
-                  <span>{choice.label}</span>
-                </button>
+                  <span>
+                    <AcronymText text={choice.label} />
+                  </span>
+                </div>
               </li>
             ))}
           </ol>
         )}
       </article>
+      </AcronymScope>
       {showLoot && <LootModal state={state} onClose={onLootClose} onOpen={onOpenTerm} />}
     </div>
   );
@@ -186,9 +202,23 @@ export function DataRoomScreen({ state, onBack }: { state: GameState; onBack: ()
             All
           </button>
           {FOLDERS.map((name) => (
-            <button key={name} type="button" className={folder === name ? 'on' : ''} onClick={() => setFolder(name)}>
-              {name}
-            </button>
+            <div
+              key={name}
+              role="tab"
+              tabIndex={0}
+              aria-selected={folder === name}
+              className={folder === name ? 'tab on' : 'tab'}
+              onClick={() => setFolder(name)}
+              onKeyDown={(event) => {
+                if (event.target !== event.currentTarget) return;
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault();
+                  setFolder(name);
+                }
+              }}
+            >
+              <AcronymText text={name} expand={false} activateParent />
+            </div>
           ))}
         </div>
       </div>
@@ -197,30 +227,33 @@ export function DataRoomScreen({ state, onBack }: { state: GameState; onBack: ()
           const have = state.docs.includes(doc.id);
           return (
             <li key={doc.id} className={have ? 'have' : 'missing'}>
+              <AcronymScope>
               <div className="doc-top">
-                <h2>{doc.name}</h2>
+                <h2>
+                  <AcronymText text={doc.name} expand={false} />
+                </h2>
                 <span>{have ? 'Collected' : 'Missing'}</span>
               </div>
               <p className="meta">
-                {doc.folder} · {doc.round}
-                {doc.critical ? ' · Critical' : ''}
+                <AcronymText text={`${doc.folder} · ${doc.round}${doc.critical ? ' · Critical' : ''}`} expand={false} />
               </p>
               <p>
                 <strong>What it is. </strong>
-                {doc.what}
+                <AcronymText text={doc.what} />
               </p>
               <p>
                 <strong>Why investors ask. </strong>
-                {doc.why}
+                <AcronymText text={doc.why} />
               </p>
               <p>
                 <strong>Used for. </strong>
-                {doc.usedFor}
+                <AcronymText text={doc.usedFor} />
               </p>
               <p>
                 <strong>Gotcha. </strong>
-                {doc.gotcha}
+                <AcronymText text={doc.gotcha} />
               </p>
+              </AcronymScope>
             </li>
           );
         })}
@@ -231,8 +264,12 @@ export function DataRoomScreen({ state, onBack }: { state: GameState; onBack: ()
 
 export function GlossaryScreen({ state, onBack }: { state: GameState; onBack: () => void }) {
   const [query, setQuery] = useState('');
-  const unlocked = GLOSSARY.filter((entry) => state.terms.includes(entry.id));
-  const shown = unlocked.filter((entry) => `${entry.term} ${entry.definition}`.toLowerCase().includes(query.trim().toLowerCase()));
+  const needle = query.trim().toLowerCase();
+  const acronymIds = new Set(ACRONYMS.map((item) => item.id));
+  const story = GLOSSARY.filter((entry) => !acronymIds.has(entry.id));
+  const unlocked = story.filter((entry) => state.terms.includes(entry.id));
+  const shown = unlocked.filter((entry) => `${entry.term} ${entry.definition} ${entry.why}`.toLowerCase().includes(needle));
+  const acronyms = ACRONYMS.filter((item) => `${item.token} ${item.expansion} ${item.plain} ${item.why}`.toLowerCase().includes(needle));
   useEffect(() => {
     if (!state.glossaryFocus) return;
     document.getElementById(`term-${state.glossaryFocus}`)?.scrollIntoView({ block: 'start' });
@@ -247,7 +284,7 @@ export function GlossaryScreen({ state, onBack }: { state: GameState; onBack: ()
           <p className="kicker">Glossary / codex</p>
           <h1>Terms you have actually met</h1>
           <p>
-            {unlocked.length} unlocked. {GLOSSARY.length - unlocked.length} still out in the world, waiting for a scene.
+            {unlocked.length} unlocked. {story.length - unlocked.length} still out in the world, waiting for a scene.
           </p>
         </div>
       </header>
@@ -255,19 +292,54 @@ export function GlossaryScreen({ state, onBack }: { state: GameState; onBack: ()
         Search
         <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="cap, preference, SAFE…" />
       </label>
+      <h2>Acronyms</h2>
+      <p>Spelled out for a first read. The same words in the story can be tapped, focused, or hovered.</p>
+      <ul className="doc-list">
+        {acronyms.map((item) => {
+          const entry = glossaryMap.get(item.id);
+          return (
+            <li key={item.id} id={`term-${item.id}`} className={state.glossaryFocus === item.id ? 'have' : ''}>
+              <AcronymScope>
+                <h2>
+                  <AcronymText text={item.token} expand={false} />
+                  {state.terms.includes(item.id) ? ' · met' : ''}
+                </h2>
+                <p>
+                  <AcronymText text={entry?.definition ?? `${item.expansion}. ${item.plain}`} />
+                </p>
+                <p>
+                  <strong>Why it matters. </strong>
+                  <AcronymText text={entry?.why ?? item.why} />
+                </p>
+                <p>
+                  <strong>Example. </strong>
+                  <AcronymText text={entry?.example ?? item.example} />
+                </p>
+              </AcronymScope>
+            </li>
+          );
+        })}
+      </ul>
+      <h2>From your run</h2>
       <ul className="doc-list">
         {shown.map((entry) => (
           <li key={entry.id} id={`term-${entry.id}`} className={state.glossaryFocus === entry.id ? 'have' : ''}>
-            <h2>{entry.term}</h2>
-            <p>{entry.definition}</p>
-            <p>
-              <strong>Why it matters. </strong>
-              {entry.why}
-            </p>
-            <p>
-              <strong>Example. </strong>
-              {entry.example}
-            </p>
+            <AcronymScope>
+              <h2>
+                <AcronymText text={entry.term} expand={false} />
+              </h2>
+              <p>
+                <AcronymText text={entry.definition} />
+              </p>
+              <p>
+                <strong>Why it matters. </strong>
+                <AcronymText text={entry.why} />
+              </p>
+              <p>
+                <strong>Example. </strong>
+                <AcronymText text={entry.example} />
+              </p>
+            </AcronymScope>
           </li>
         ))}
       </ul>
@@ -292,20 +364,29 @@ export function EndingScreen({
   const paths = untakenPaths(state).slice(0, 6);
   const blockers = kind === 'okay' ? greatBlockers(state) : [];
   return (
+    <AcronymScope>
     <main className="ending">
       {state.deal.closed && <p className="stamp">Wire received</p>}
       {kind === 'bridge' && <p className="stamp alt">Bridge wired</p>}
       <p className="kicker">{kindLabel(kind)}</p>
       <h1>{kindTitle(kind)}</h1>
-      <p className="lede">{kindCopy(kind, state)}</p>
-      {state.failReason && <p className="fail-reason">{state.failReason}</p>}
+      <p className="lede">
+        <AcronymText text={kindCopy(kind, state)} />
+      </p>
+      {state.failReason && (
+        <p className="fail-reason">
+          <AcronymText text={state.failReason} />
+        </p>
+      )}
       <ol className="grades">
         {score.grades.map((grade) => (
           <li key={grade.meter}>
             <strong>
               {grade.meter} · {grade.letter}
             </strong>
-            <span>{grade.detail}</span>
+            <span>
+              <AcronymText text={grade.detail} />
+            </span>
           </li>
         ))}
       </ol>
@@ -319,7 +400,9 @@ export function EndingScreen({
           <p>This close is real. It is not the great-round ending because:</p>
           <ul>
             {blockers.slice(0, 3).map((id) => (
-              <li key={id}>{blockerBlurb(id)}</li>
+              <li key={id}>
+                <AcronymText text={blockerBlurb(id)} />
+              </li>
             ))}
           </ul>
           {blockers.length > 3 && <p>And {blockers.length - 3} more.</p>}
@@ -330,11 +413,11 @@ export function EndingScreen({
         <ul className="paths">
           {paths.map((path) => (
             <li key={path.id}>
-              <button type="button" onClick={() => onTerm(path.glossaryId)}>
-                {path.title}
-              </button>
               <p>
-                {path.lesson}{' '}
+                <AcronymText text={path.title} />
+              </p>
+              <p>
+                <AcronymText text={path.lesson} />{' '}
                 <button type="button" className="text-button" onClick={() => onTerm(path.glossaryId)}>
                   {glossaryMap.get(path.glossaryId)?.term ?? 'Glossary'}
                 </button>
@@ -349,7 +432,9 @@ export function EndingScreen({
           {ACHIEVEMENTS.filter((badge) => state.achievements.includes(badge.id)).map((badge) => (
             <li key={badge.id}>
               <strong>{badge.name}</strong>
-              <span>{badge.description}</span>
+              <span>
+                <AcronymText text={badge.description} />
+              </span>
             </li>
           ))}
         </ul>
@@ -369,6 +454,7 @@ export function EndingScreen({
       </div>
       <Disclaimer />
     </main>
+    </AcronymScope>
   );
 }
 
@@ -389,7 +475,9 @@ function TermChips({ state }: { state: GameState }) {
   return (
     <ul className="flags">
       {chips.map((chip) => (
-        <li key={chip}>{chip}</li>
+        <li key={chip}>
+          <AcronymText text={chip} />
+        </li>
       ))}
     </ul>
   );

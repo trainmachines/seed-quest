@@ -1,12 +1,16 @@
+import { ACRONYMS } from './acronyms';
+
 export interface GlossaryEntry {
   id: string;
   term: string;
   definition: string;
   why: string;
   example: string;
+  /** Always listed. A scene does not have to unlock it. */
+  reference?: boolean;
 }
 
-export const GLOSSARY: GlossaryEntry[] = [
+const STORY_GLOSSARY: GlossaryEntry[] = [
   {
     id: 'pre-seed',
     term: 'Pre-seed',
@@ -31,14 +35,14 @@ export const GLOSSARY: GlossaryEntry[] = [
   {
     id: 'delaware-c-corp',
     term: 'Delaware C-corp',
-    definition: 'A corporation formed in Delaware. US venture investors expect this shape for a priced round.',
+    definition: 'A C corporation formed in Delaware. US venture investors expect this shape for a priced round.',
     why: 'Preferred stock, option plans, and NVCA documents are built for C-corps. An LLC or a random state filing usually has to be converted later.',
     example: 'Kindling’s counsel will not close the seed into a Wyoming entity or an LLC. They ask for a Delaware C-corp.',
   },
   {
     id: 'qsbs',
     term: 'QSBS',
-    definition: 'Qualified Small Business Stock, a US tax idea under Section 1202. It can apply to stock in a C-corp, with many conditions and a multi-year hold.',
+    definition: 'Qualified Small Business Stock, under Section 1202. It can exclude gain on C-corp stock if many conditions and a five-year hold are met.',
     why: 'It is one reason investors like C-corps. It is not a promise, and it is not a reason to skip a lawyer.',
     example: 'A founder who holds C-corp stock for years might ask a tax advisor about QSBS. An LLC interest is not QSBS.',
   },
@@ -72,15 +76,15 @@ export const GLOSSARY: GlossaryEntry[] = [
   },
   {
     id: '83b',
-    term: '83(b) election',
-    definition: 'A letter to the IRS asking to be taxed on restricted stock now, instead of later as it vests. It is due 30 days after the stock is issued. There is no extension.',
+    term: '83(b)',
+    definition: 'Section 83(b) election. A letter to the IRS asking to be taxed on restricted stock now, instead of later as it vests. It is due 30 days after issuance. There is no extension.',
     why: 'Filed on time, tax is based on today’s tiny value. Missed, you can owe ordinary income tax as shares vest, at a higher value, without cash to pay it.',
     example: 'Stock issued March 1. The election must be filed by March 31. April 1 is late. Keep proof.',
   },
   {
     id: 'fmv',
-    term: 'Fair market value',
-    definition: 'What a willing buyer would pay a willing seller. For cheap founder stock it is often near zero. Later, a 409A sets a value for options.',
+    term: 'FMV',
+    definition: 'Fair market value. What a willing buyer would pay a willing seller. For cheap founder stock it is often near zero. Later, a 409A sets a value for options.',
     why: 'The 83(b) bet is that today’s value is low. If you miss the window, later vesting is taxed on the higher value.',
     example: 'You buy shares worth about nothing. Two years later the 409A says common is $0.40. That spread is the tax story if no 83(b) was filed.',
   },
@@ -171,7 +175,7 @@ export const GLOSSARY: GlossaryEntry[] = [
   {
     id: 'form-d',
     term: 'Form D',
-    definition: 'A notice filed with the SEC after a private sale of securities. It is due within 15 days of the first sale. It is not an approval.',
+    definition: 'SEC Form D. A notice filed after a private sale of securities. It is due within 15 days of the first sale. It is not an approval.',
     why: 'Late notices annoy states and diligence lawyers. Filing it does not “allow” the round. Skipping it does not make the sale invisible.',
     example: 'The first SAFE becomes irrevocable on May 1. Form D wants to be filed by May 16.',
   },
@@ -324,15 +328,15 @@ export const GLOSSARY: GlossaryEntry[] = [
   },
   {
     id: '409a',
-    term: '409A valuation',
-    definition: 'An independent appraisal of the common stock’s fair market value, used so employee options are priced legally.',
+    term: '409A',
+    definition: 'Section 409A valuation. An independent appraisal of the common stock’s fair market value, used so employee options are priced legally.',
     why: 'Options priced below fair market value can create tax under Section 409A. Founder stock bought at the start is a different moment.',
     example: 'Before the first option grants, you commission a 409A. The strike price matches that value.',
   },
   {
     id: 'stock-purchase-agreement',
-    term: 'Stock Purchase Agreement',
-    definition: 'The NVCA contract where investors buy the preferred stock. It holds the price, the reps, the closing conditions, and the disclosure schedule.',
+    term: 'SPA',
+    definition: 'Stock Purchase Agreement. The NVCA contract where investors buy the preferred stock: the price, the reps, the closing conditions, and the disclosure schedule.',
     why: 'The term sheet is a summary. This is the purchase. A rep you cannot make, like “we own all the IP,” has to be qualified.',
     example: 'Kindling buys Series Seed Preferred under the SPA once the charter is filed and the signature pages are in.',
   },
@@ -359,8 +363,8 @@ export const GLOSSARY: GlossaryEntry[] = [
   },
   {
     id: 'investors-rights-agreement',
-    term: 'Investors’ Rights Agreement',
-    definition: 'The NVCA contract for registration rights, information rights, and pro rata rights.',
+    term: 'IRA',
+    definition: 'Investors’ Rights Agreement, not a retirement account. The NVCA contract for registration rights, information rights, and pro rata.',
     why: 'This is where “who gets to invest again” and “who gets the financials” actually live.',
     example: 'Major investors get quarterly financials and the right to take their pro rata of the Series A.',
   },
@@ -380,8 +384,8 @@ export const GLOSSARY: GlossaryEntry[] = [
   },
   {
     id: 'rofr',
-    term: 'Right of first refusal',
-    definition: 'The company’s right to buy a founder’s shares first, and then the major investors’ right to buy what the company does not take, before an outsider can.',
+    term: 'ROFR',
+    definition: 'Right of first refusal. The company can buy a founder’s shares first, then major investors can buy what the company does not take, before an outsider can.',
     why: 'It stops a quiet secondary sale. It lives in the ROFR and Co-Sale Agreement.',
     example: 'You want to sell 1% to a friend. The company can step in and buy that 1% on the same terms instead.',
   },
@@ -399,6 +403,18 @@ export const GLOSSARY: GlossaryEntry[] = [
     why: 'A missing signature holds the wire. Payroll does not wait for DocuSign.',
     example: 'The charter is filed, every signature page is in, and Kindling wires $2.5M. Then the round is closed.',
   },
+];
+
+export const GLOSSARY: GlossaryEntry[] = [
+  ...STORY_GLOSSARY,
+  ...ACRONYMS.filter((item) => item.reference).map((item) => ({
+    id: item.id,
+    term: item.token,
+    definition: `${item.expansion}. ${item.plain}`,
+    why: item.why,
+    example: item.example,
+    reference: true as const,
+  })),
 ];
 
 export const glossaryMap = new Map(GLOSSARY.map((entry) => [entry.id, entry]));

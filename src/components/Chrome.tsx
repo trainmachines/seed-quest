@@ -2,12 +2,21 @@ import { glossaryMap } from '../data/glossary';
 import { documentMap } from '../data/documents';
 import { computeCapTable, eightyThreeBStatus, formDStatus, money, pct, type CapTableResult } from '../engine/math';
 import type { Delta, GameState } from '../engine/types';
+import { AcronymScope, AcronymText } from './AcronymText';
+
+const DISCLAIMER =
+  'Educational only. Not legal, tax, or investment advice. This is a fictional US example: a Delaware C-corp, YC-style post-money SAFEs, and NVCA model documents. Real deals need a lawyer.';
 
 export function Disclaimer({ compact = false }: { compact?: boolean }) {
   return (
     <p className={compact ? 'disclaimer compact' : 'disclaimer'}>
-      Educational only. Not legal, tax, or investment advice. This is a fictional US example: a Delaware C-corp, YC-style
-      post-money SAFEs, and NVCA model documents. Real deals need a lawyer.
+      {compact ? (
+        <AcronymText text={DISCLAIMER} expand={false} />
+      ) : (
+        <AcronymScope>
+          <AcronymText text={DISCLAIMER} />
+        </AcronymScope>
+      )}
     </p>
   );
 }
@@ -24,12 +33,18 @@ export function Meters({ state }: { state: GameState }) {
       <Meter name="Reputation" value={`${Math.round(state.reputation)}`} width={state.reputation} tone="blue" />
       {b.kind !== 'inactive' && (
         <p className={`clock clock-${b.kind}`}>
-          83(b) {b.kind === 'open' ? `day ${b.elapsed} of 30 · ${b.left} left` : b.kind === 'filed' ? 'filed' : 'missed'}
+          <AcronymText
+            text={`83(b) ${b.kind === 'open' ? `day ${b.elapsed} of 30 · ${b.left} left` : b.kind === 'filed' ? 'filed' : 'missed'}`}
+            expand={false}
+          />
         </p>
       )}
       {formd.kind !== 'inactive' && (
         <p className={`clock clock-${formd.kind}`}>
-          Form D {formd.kind === 'open' ? `${formd.left} days left` : formd.kind === 'filed' ? 'filed' : 'late'}
+          <AcronymText
+            text={`Form D ${formd.kind === 'open' ? `${formd.left} days left` : formd.kind === 'filed' ? 'filed' : 'late'}`}
+            expand={false}
+          />
         </p>
       )}
     </aside>
@@ -74,9 +89,10 @@ export function CapTablePanel({ state, highlight = false }: { state: GameState; 
               {safe.name}
               {safe.homemade ? ' · redo' : ''}
               <small>
-                {' '}
-                {safe.cap > 0 ? `${money(safe.amount)} ÷ ${money(safe.cap)}` : 'discount, price set at the round'}
-                {safe.mfnApplied ? ' · MFN cap' : ''}
+                <AcronymText
+                  text={` ${safe.cap > 0 ? `${money(safe.amount)} ÷ ${money(safe.cap)}` : 'discount, price set at the round'}${safe.mfnApplied ? ' · MFN cap' : ''}`}
+                  expand={false}
+                />
               </small>
             </span>
             <strong>{pct(safe.pctNow)}</strong>
@@ -158,12 +174,29 @@ export function DeltaBanner({ delta }: { delta: Delta }) {
         {chips.map((item) => (
           <span key={item}>{item}</span>
         ))}
-        {delta.unchangedSafeIds.length > 0 && <span className="chip-still">Earlier SAFE unchanged</span>}
-        {delta.shiftedSafeIds.length > 0 && <span className="chip-shift">MFN moved a cap</span>}
+        {delta.unchangedSafeIds.length > 0 && (
+          <span className="chip-still">
+            <AcronymText text="Earlier SAFE unchanged" expand={false} />
+          </span>
+        )}
+        {delta.shiftedSafeIds.length > 0 && (
+          <span className="chip-shift">
+            <AcronymText text="MFN moved a cap" expand={false} />
+          </span>
+        )}
       </div>
-      <p>{delta.because}</p>
+      <p>
+        <AcronymText text={delta.because} />
+      </p>
       {delta.docs.length > 0 && (
-        <p className="loot-line">Data room + {delta.docs.slice(0, 4).map((id) => documentMap.get(id)?.name ?? id).join(', ')}{delta.docs.length > 4 ? ` and ${delta.docs.length - 4} more` : ''}</p>
+        <p className="loot-line">
+          <AcronymText
+            text={`Data room + ${delta.docs
+              .slice(0, 4)
+              .map((id) => documentMap.get(id)?.name ?? id)
+              .join(', ')}${delta.docs.length > 4 ? ` and ${delta.docs.length - 4} more` : ''}`}
+          />
+        </p>
       )}
     </div>
   );
@@ -185,8 +218,12 @@ export function LootModal({ state, onClose, onOpen }: { state: GameState; onClos
     <div className="modal-back" role="presentation">
       <div className="modal" role="dialog" aria-modal="true" aria-labelledby="loot-title">
         <p className="kicker">Codex loot</p>
-        <h2 id="loot-title">{entry.term}</h2>
-        <p>{entry.definition}</p>
+        <h2 id="loot-title">
+          <AcronymText text={entry.term} expand={false} />
+        </h2>
+        <p>
+          <AcronymText text={entry.definition} expand={false} />
+        </p>
         {state.lastDelta && <DeltaBanner delta={{ ...state.lastDelta, docs: [], terms: [] }} />}
         {rest.length > 0 && (
           <p className="also">
